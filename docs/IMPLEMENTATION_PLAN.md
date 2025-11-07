@@ -420,6 +420,11 @@ Using `textual` for the TUI framework - provides async support, reactive updates
   - Use $boost background for visibility
   - Add bold text styling
   - Add comprehensive test for status messages
-- Tests: 53 passing, coverage 75.27%
+- ✅ Use force delete and improve confirmation messages (commit b2a6fbd)
+  - Changed to git branch -D (force delete) to suppress "not fully merged" error
+  - Updated confirmation dialog to show merge status warnings
+  - Show ⚠️ WARNING for unmerged branches with explanation
+  - Context-aware messages based on merge status and track status
+- Tests: 53 passing, coverage 72.26%
 
 **Process Note:** This implementation plan is updated with each step to maintain accurate project status.
