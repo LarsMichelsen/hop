@@ -406,6 +406,9 @@ Using `textual` for the TUI framework - provides async support, reactive updates
   - Cancels pending metadata workers
   - Adjusts cursor position
   - Allows multiple deletions per session
-- Tests: 52 passing, coverage 74.67%
+- ✅ Fixed deletion bugs (commit 9c3a527)
+  - Fixed order: get row key before deletion
+  - Fixed double deletion bug (shared list reference)
+- Tests: 52 passing, coverage 74.60%
 
 **Process Note:** This implementation plan is updated with each step to maintain accurate project status.
