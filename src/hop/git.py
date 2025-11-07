@@ -160,17 +160,130 @@ def checkout_branch(branch_name: str) -> None:
         raise RuntimeError(f"Failed to checkout branch: {result.stderr}")
 
 
-def rebase_to_branch(branch_name: str) -> None:
-    """Rebase current branch to the specified branch."""
+def get_base_branch(branch_name: str) -> str | None:
+    """Detect the base/upstream branch of the given branch.
+
+    Tries multiple strategies to find the base branch:
+    1. Use configured upstream if available
+    2. Find best common ancestor with main/master/develop
+    3. Return None if cannot determine
+
+    Args:
+        branch_name: Name of the branch to find the base for
+
+    Returns:
+        Name of the base branch, or None if cannot determine
+    """
+    # Strategy 1: Check for configured upstream
     result = subprocess.run(
-        ["git", "rebase", branch_name],
+        [
+            "git",
+            "for-each-ref",
+            f"refs/heads/{branch_name}",
+            "--format=%(upstream:short)",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode == 0 and result.stdout.strip():
+        upstream = result.stdout.strip()
+        if upstream:
+            # Extract branch name from upstream (e.g., "origin/main" -> "main")
+            # Try to find local branch corresponding to upstream
+            if "/" in upstream:
+                local_branch = upstream.split("/", 1)[1]
+                # Check if local branch exists
+                check_result = subprocess.run(
+                    ["git", "rev-parse", "--verify", f"refs/heads/{local_branch}"],
+                    capture_output=True,
+                    check=False,
+                )
+                if check_result.returncode == 0:
+                    return local_branch
+            return upstream
+
+    # Strategy 2: Try common base branches
+    common_bases = ["main", "master", "develop", "development"]
+
+    for base in common_bases:
+        # Skip if checking against itself
+        if base == branch_name:
+            continue
+
+        # Check if base branch exists
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", f"refs/heads/{base}"],
+            capture_output=True,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            continue
+
+        # Check if there's a merge-base (common ancestor)
+        result = subprocess.run(
+            ["git", "merge-base", base, branch_name],
+            capture_output=True,
+            check=False,
+        )
+
+        if result.returncode == 0:
+            # Found a common ancestor, this is likely the base branch
+            return base
+
+    # Could not determine base branch
+    return None
+
+
+def rebase_to_branch(branch_name: str) -> None:
+    """Rebase the selected branch to its upstream/base branch.
+
+    This function:
+    1. Detects the base/upstream branch of the selected branch
+    2. Checks out the selected branch
+    3. Rebases it to its base branch
+
+    Example: If branch 'feature' was branched from 'main' with 3 commits,
+    this will execute: git checkout feature && git rebase main
+
+    Args:
+        branch_name: Name of the branch to rebase
+
+    Raises:
+        RuntimeError: If rebase fails or base branch cannot be determined
+    """
+    # First, detect the base branch
+    base_branch = get_base_branch(branch_name)
+
+    if base_branch is None:
+        raise RuntimeError(
+            f"Cannot determine base branch for '{branch_name}'. "
+            "Please set an upstream branch or ensure the branch was created from main/master."
+        )
+
+    # Checkout the branch
+    result = subprocess.run(
+        ["git", "checkout", branch_name],
         capture_output=True,
         text=True,
         check=False,
     )
 
     if result.returncode != 0:
-        raise RuntimeError(f"Failed to rebase to branch: {result.stderr}")
+        raise RuntimeError(f"Failed to checkout branch: {result.stderr}")
+
+    # Rebase to the base branch
+    result = subprocess.run(
+        ["git", "rebase", base_branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to rebase to {base_branch}: {result.stderr}")
 
 
 def delete_branch(branch_name: str) -> None:

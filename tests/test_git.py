@@ -10,6 +10,7 @@ from hop.git import (
     checkout_branch,
     delete_branch,
     fetch_branch_metadata,
+    get_base_branch,
     get_branches_fast,
     get_current_branch,
     is_git_repo,
@@ -143,15 +144,73 @@ def test_checkout_branch_error() -> None:
             checkout_branch("nonexistent")
 
 
+def test_get_base_branch_with_upstream() -> None:
+    """Test detecting base branch when upstream is configured."""
+    # Mock the for-each-ref call to return upstream
+    mock_upstream = Mock()
+    mock_upstream.returncode = 0
+    mock_upstream.stdout = "origin/main"
+
+    # Mock the rev-parse call to verify local branch exists
+    mock_verify = Mock()
+    mock_verify.returncode = 0
+
+    with patch("subprocess.run", side_effect=[mock_upstream, mock_verify]):
+        base = get_base_branch("feature")
+        assert base == "main"
+
+
+def test_get_base_branch_common_ancestor() -> None:
+    """Test detecting base branch using common ancestor."""
+    # Mock no upstream
+    mock_no_upstream = Mock()
+    mock_no_upstream.returncode = 0
+    mock_no_upstream.stdout = ""
+
+    # Mock rev-parse to say 'main' exists
+    mock_main_exists = Mock()
+    mock_main_exists.returncode = 0
+
+    # Mock merge-base to say there's a common ancestor
+    mock_merge_base = Mock()
+    mock_merge_base.returncode = 0
+
+    with patch("subprocess.run", side_effect=[mock_no_upstream, mock_main_exists, mock_merge_base]):
+        base = get_base_branch("feature")
+        assert base == "main"
+
+
+def test_get_base_branch_none() -> None:
+    """Test that we return None when base branch cannot be determined."""
+    # Mock no upstream
+    mock_no_upstream = Mock()
+    mock_no_upstream.returncode = 0
+    mock_no_upstream.stdout = ""
+
+    # Mock that no common bases exist
+    mock_no_branch = Mock()
+    mock_no_branch.returncode = 1
+
+    with patch("subprocess.run", side_effect=[mock_no_upstream] + [mock_no_branch] * 4):
+        base = get_base_branch("orphan")
+        assert base is None
+
+
 def test_rebase_to_branch_error() -> None:
     """Test that we handle errors when rebasing to a branch."""
-    mock_result = Mock()
-    mock_result.returncode = 1
-    mock_result.stderr = "fatal: no such branch"
+    # Mock successful checkout
+    mock_checkout = Mock()
+    mock_checkout.returncode = 0
 
-    with patch("subprocess.run", return_value=mock_result):
-        with pytest.raises(RuntimeError, match="Failed to rebase to branch"):
-            rebase_to_branch("nonexistent")
+    # Mock failed rebase
+    mock_rebase = Mock()
+    mock_rebase.returncode = 1
+    mock_rebase.stderr = "fatal: conflict"
+
+    with patch("hop.git.get_base_branch", return_value="main"):
+        with patch("subprocess.run", side_effect=[mock_checkout, mock_rebase]):
+            with pytest.raises(RuntimeError, match="Failed to rebase to main"):
+                rebase_to_branch("feature")
 
 
 def test_delete_branch_error() -> None:
@@ -271,12 +330,21 @@ def test_checkout_branch_success() -> None:
 
 def test_rebase_to_branch_success() -> None:
     """Test successful rebase to branch."""
-    mock_result = Mock()
-    mock_result.returncode = 0
+    # Mock successful operations
+    mock_success = Mock()
+    mock_success.returncode = 0
 
-    with patch("subprocess.run", return_value=mock_result):
-        # Should not raise an exception
-        rebase_to_branch("main")
+    with patch("hop.git.get_base_branch", return_value="main"):
+        with patch("subprocess.run", side_effect=[mock_success, mock_success]):
+            # Should not raise an exception
+            rebase_to_branch("feature")
+
+
+def test_rebase_to_branch_no_base() -> None:
+    """Test that we handle the case when base branch cannot be determined."""
+    with patch("hop.git.get_base_branch", return_value=None):
+        with pytest.raises(RuntimeError, match="Cannot determine base branch"):
+            rebase_to_branch("orphan")
 
 
 def test_delete_branch_success() -> None:
