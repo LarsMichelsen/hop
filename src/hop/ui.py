@@ -201,8 +201,9 @@ class BranchList(DataTable):  # type: ignore[misc]
             return
 
         # Get the RowKey at the specified index from the ordered rows list
-        # ordered_rows is a list of RowKey objects in the order they appear in the table
-        row_key = list(self.ordered_rows)[row_index]  # type: ignore[misc]
+        # ordered_rows contains Row objects, extract the key from the Row
+        row = list(self.ordered_rows)[row_index]  # type: ignore[misc]
+        row_key = row.key  # type: ignore[misc]
 
         # Remove row from table using the RowKey
         self.remove_row(row_key)  # type: ignore[misc]
