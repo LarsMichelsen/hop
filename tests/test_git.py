@@ -1,6 +1,5 @@
 """Tests for git module."""
 
-
 from hop.git import BranchInfo
 
 

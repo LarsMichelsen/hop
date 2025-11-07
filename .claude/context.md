@@ -57,6 +57,38 @@ uv run ruff format && uv run ruff check --fix && uv run basedpyright && uv run p
 - DO NOT commit without running all checks
 - Fix all issues before committing
 
+## Automatic Git Commits
+
+**MANDATORY:** After each significant change where all checks pass, you MUST create a git commit automatically:
+
+1. **Run all pre-commit checks** (format, lint, type check, tests)
+2. **If all checks pass**, immediately create a commit
+3. **No user confirmation needed** - commit automatically
+4. **Commit message format:**
+   - Clear, concise description of changes
+
+**What counts as "significant change":**
+- New feature implementation
+- Bug fix
+- Refactoring
+- Documentation updates
+- Test additions
+
+**Do NOT wait for user to ask** - commit proactively when checks pass.
+
+**Example workflow:**
+```bash
+# After making changes
+uv run ruff format && uv run ruff check --fix && uv run basedpyright && uv run pytest
+
+# If all pass, immediately commit
+git add .
+git commit -m "$(cat <<'EOF'
+Add feature X
+EOF
+)"
+```
+
 ## Coding Standards
 
 ### Documentation Philosophy
