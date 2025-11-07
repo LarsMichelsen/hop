@@ -305,8 +305,18 @@ def test_hop_app_action_rebase_invalid_cursor(sample_branches: list[BranchInfo])
 
 
 def test_hop_app_action_delete_success(sample_branches: list[BranchInfo]) -> None:
-    """Test successful delete action."""
-    app = HopApp(sample_branches)
+    """Test successful delete action without confirmation (synced branch)."""
+    # Create a branch that's synced with upstream (track_status == "=")
+    synced_branch = BranchInfo(
+        name="feature",
+        creator_date=sample_branches[1].creator_date,
+        last_commit_message="Add feature",
+        upstream="origin/feature",
+        track_status="=",
+        is_loading=False,
+    )
+    branches = [sample_branches[0], synced_branch]
+    app = HopApp(branches)
 
     # Mock query_one to return a mock BranchList
     mock_branch_list = Mock()
@@ -317,13 +327,49 @@ def test_hop_app_action_delete_success(sample_branches: list[BranchInfo]) -> Non
     with patch("hop.ui.delete_branch"):
         app.action_delete()
 
-        # Should exit after successful delete
+        # Should exit after successful delete (no confirmation needed)
         app.exit.assert_called_once()
+
+
+def test_hop_app_action_delete_with_confirmation(sample_branches: list[BranchInfo]) -> None:
+    """Test delete action that requires confirmation (unsynced branch)."""
+    # Create a branch that's ahead of upstream (track_status == ">")
+    ahead_branch = BranchInfo(
+        name="feature",
+        creator_date=sample_branches[1].creator_date,
+        last_commit_message="Add feature",
+        upstream="origin/feature",
+        track_status=">",
+        is_loading=False,
+    )
+    branches = [sample_branches[0], ahead_branch]
+    app = HopApp(branches)
+
+    # Mock query_one to return a mock BranchList
+    mock_branch_list = Mock()
+    mock_branch_list.cursor_row = 1
+    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    app.push_screen = Mock()  # type: ignore[method-assign]
+
+    app.action_delete()
+
+    # Should show confirmation dialog (not delete immediately)
+    app.push_screen.assert_called_once()
 
 
 def test_hop_app_action_delete_error(sample_branches: list[BranchInfo]) -> None:
     """Test delete action with error."""
-    app = HopApp(sample_branches)
+    # Create a synced branch (so no confirmation)
+    synced_branch = BranchInfo(
+        name="feature",
+        creator_date=sample_branches[1].creator_date,
+        last_commit_message="Add feature",
+        upstream="origin/feature",
+        track_status="=",
+        is_loading=False,
+    )
+    branches = [sample_branches[0], synced_branch]
+    app = HopApp(branches)
 
     # Mock query_one to return a mock BranchList
     mock_branch_list = Mock()
@@ -349,12 +395,14 @@ def test_hop_app_action_delete_invalid_cursor(sample_branches: list[BranchInfo])
     mock_branch_list = Mock()
     mock_branch_list.cursor_row = 100
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    app.push_screen = Mock()  # type: ignore[method-assign]
 
     with patch("hop.ui.delete_branch") as mock_delete:
         app.action_delete()
 
-        # Should not attempt delete
+        # Should not attempt delete or show confirmation
         mock_delete.assert_not_called()
+        app.push_screen.assert_not_called()
 
 
 def test_run_interactive_ui(sample_branches: list[BranchInfo]) -> None:

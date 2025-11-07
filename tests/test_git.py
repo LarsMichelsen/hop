@@ -349,9 +349,20 @@ def test_rebase_to_branch_no_base() -> None:
 
 def test_delete_branch_success() -> None:
     """Test successful branch deletion."""
-    mock_result = Mock()
-    mock_result.returncode = 0
+    mock_current = Mock()
+    mock_current.returncode = 0
+    mock_current.stdout = "main"
 
-    with patch("subprocess.run", return_value=mock_result):
+    mock_delete = Mock()
+    mock_delete.returncode = 0
+
+    with patch("subprocess.run", side_effect=[mock_current, mock_delete]):
         # Should not raise an exception
         delete_branch("feature")
+
+
+def test_delete_current_branch() -> None:
+    """Test that we cannot delete the current branch."""
+    with patch("hop.git.get_current_branch", return_value="main"):
+        with pytest.raises(RuntimeError, match="Cannot delete the currently checked out branch"):
+            delete_branch("main")

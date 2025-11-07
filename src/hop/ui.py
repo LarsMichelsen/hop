@@ -5,7 +5,9 @@ from typing import ClassVar
 
 from textual import work
 from textual.app import App, ComposeResult
-from textual.widgets import DataTable, Footer, Header, Static
+from textual.containers import Container, Horizontal
+from textual.screen import ModalScreen
+from textual.widgets import Button, DataTable, Footer, Header, Label, Static
 from textual.worker import Worker
 
 from hop.git import (
@@ -16,6 +18,73 @@ from hop.git import (
     get_current_branch,
     rebase_to_branch,
 )
+
+
+class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
+    """Modal screen for confirming branch deletion."""
+
+    CSS = """
+    ConfirmDeleteScreen {
+        align: center middle;
+    }
+
+    #confirm-dialog {
+        width: 60;
+        height: 11;
+        border: thick $background 80%;
+        background: $surface;
+        padding: 1 2;
+    }
+
+    #confirm-message {
+        width: 100%;
+        content-align: center middle;
+        margin-bottom: 1;
+    }
+
+    #button-container {
+        width: 100%;
+        height: auto;
+        align: center middle;
+    }
+
+    Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, branch_name: str, track_status: str) -> None:
+        super().__init__()
+        self.branch_name = branch_name
+        self.track_status = track_status
+
+    def compose(self) -> ComposeResult:
+        """Compose the confirmation dialog."""
+        status_msg = ""
+        if self.track_status == ">":
+            status_msg = "\nThis branch is ahead of upstream (has unpushed commits)."
+        elif self.track_status == "<":
+            status_msg = "\nThis branch is behind upstream."
+        elif self.track_status == "<>":
+            status_msg = "\nThis branch has diverged from upstream."
+        elif not self.track_status:
+            status_msg = "\nThis branch has no upstream configured."
+
+        with Container(id="confirm-dialog"):
+            yield Label(
+                f"Delete branch '{self.branch_name}'?{status_msg}",
+                id="confirm-message",
+            )
+            with Horizontal(id="button-container"):
+                yield Button("Delete", variant="error", id="confirm")
+                yield Button("Cancel", variant="primary", id="cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "confirm":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
 
 
 class BranchList(DataTable):  # type: ignore[misc]
@@ -194,9 +263,33 @@ class HopApp(App[None]):
             return
 
         branch = self.branches[cursor_row]
+
+        # If branch is synced with upstream (track_status == "="), delete without confirmation
+        # Otherwise, show confirmation dialog
+        if branch.track_status == "=" and not branch.is_loading:
+            self._perform_delete(branch.name)
+        else:
+            # Show confirmation dialog
+            self.push_screen(
+                ConfirmDeleteScreen(branch.name, branch.track_status),
+                self._handle_delete_confirmation,
+            )
+
+    def _handle_delete_confirmation(self, confirmed: bool | None) -> None:
+        """Handle the result of delete confirmation."""
+        if confirmed is True:
+            branch_list = self.query_one(BranchList)
+            cursor_row = branch_list.cursor_row
+            if cursor_row < 0 or cursor_row >= len(self.branches):
+                return
+            branch = self.branches[cursor_row]
+            self._perform_delete(branch.name)
+
+    def _perform_delete(self, branch_name: str) -> None:
+        """Perform the actual branch deletion."""
         try:
-            delete_branch(branch.name)
-            self.show_status(f"Deleted branch: {branch.name}")
+            delete_branch(branch_name)
+            self.show_status(f"Deleted branch: {branch_name}")
             # Exit after successful delete
             self.exit()
         except RuntimeError as e:

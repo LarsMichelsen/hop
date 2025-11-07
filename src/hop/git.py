@@ -287,7 +287,28 @@ def rebase_to_branch(branch_name: str) -> None:
 
 
 def delete_branch(branch_name: str) -> None:
-    """Delete the specified branch."""
+    """Delete the specified branch.
+
+    Args:
+        branch_name: Name of the branch to delete
+
+    Raises:
+        RuntimeError: If deletion fails (e.g., trying to delete current branch,
+                     branch has unmerged changes, etc.)
+    """
+    # Check if trying to delete the current branch
+    try:
+        current = get_current_branch()
+    except RuntimeError:
+        # If we can't get current branch, let git handle the error
+        pass
+    else:
+        if current == branch_name:
+            raise RuntimeError(
+                f"Cannot delete the currently checked out branch '{branch_name}'. "
+                "Please checkout another branch first."
+            )
+
     result = subprocess.run(
         ["git", "branch", "-d", branch_name],
         capture_output=True,
