@@ -137,7 +137,7 @@ class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
 
         # Show warning based on merge status and track status
         if not self.is_merged:
-            status_msg = "\n⚠️  WARNING: This branch is NOT fully merged to upstream."
+            status_msg = "\n⚠️  This branch is NOT fully merged to upstream."
             if self.track_status == ">":
                 status_msg += "\nIt has unpushed commits that will be lost."
             elif self.track_status == "<>":
