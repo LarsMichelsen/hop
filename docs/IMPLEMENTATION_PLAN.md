@@ -2,7 +2,7 @@
 
 **NOTE:** This plan is updated with each implementation step to track progress.
 
-**Last Updated:** 2025-11-07 (after implementing delete confirmation)
+**Last Updated:** 2025-11-07 (after implementing delete without exit)
 
 ## Project Overview
 
@@ -23,8 +23,8 @@ The project is organized into three main modules:
 - Phase 2: Interactive UI (Textual-based TUI, progressive loading, navigation, key bindings)
 - Phase 3: Integration (main entry point, async coordination, comprehensive testing)
 - **Rebase feature**: Correctly rebases selected branch to its upstream/base
-- **Delete feature**: Conditional confirmation + current branch protection
-- Test coverage: 77.68% (52 tests)
+- **Delete feature**: Conditional confirmation + current branch protection + stays in UI
+- Test coverage: 74.67% (52 tests)
 
 ### 🚧 In Progress
 - None currently
@@ -215,13 +215,13 @@ class BranchInfo:
    - Handle scrolling for long branch lists
    - Navigation should work immediately, even while data loads
 
-6. **Actions** ⚠️ PARTIALLY COMPLETED
+6. **Actions** ✅ COMPLETED
    - ✅ Bind `c` key to checkout action (exits after checkout)
    - ✅ Bind `r` key to rebase action (exits after rebase - FIXED - now uses upstream)
-   - ⚠️ Bind `d` key to delete action with conditional confirmation (IN PROGRESS - should NOT exit)
+   - ✅ Bind `d` key to delete action with conditional confirmation (does NOT exit)
    - ✅ Bind `q` key to quit
    - ✅ Conditional confirmation for delete (only when branch differs from upstream)
-   - 🚧 **NEW REQUIREMENT**: Delete should update branch list and stay in UI (not exit)
+   - ✅ Delete updates branch list and stays in UI (allows multiple deletions)
 
 7. **Status Display** ✅ COMPLETED
    - Show current branch indicator
@@ -365,14 +365,14 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 - [x] Supports navigation with arrow keys and j/k
 - [x] Can checkout branch with `c`
 - [x] Can rebase with `r` - **COMPLETED: Now rebases selected branch to its upstream**
-- [ ] Can delete branch with `d` - **IN PROGRESS: Should update list, not exit**
+- [x] Can delete branch with `d` - **COMPLETED: Updates list, stays in UI**
 - [x] Handles errors gracefully
-- [x] All tests pass (52 tests, 77.68% coverage)
+- [x] All tests pass (52 tests, 74.67% coverage)
 - [x] Type checking passes (strict mode)
 - [x] Works in real-world git repositories
 - [x] Smooth UX with loading indicators for async data
 - [x] Conditional confirmation for delete (only when differs from upstream)
-- [ ] Delete updates branch list and stays in UI - **IN PROGRESS**
+- [x] Delete updates branch list and stays in UI (multiple deletions per session)
 - [ ] Color-coded track status indicators - PENDING
 
 ---
@@ -391,13 +391,8 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 ## Next Steps
 
 **Current Priority:**
-1. 🚧 **FIX**: Delete should update branch list and stay in UI (not exit)
-   - Remove deleted branch from internal list
-   - Remove row from DataTable
-   - Adjust cursor position if needed
-   - Show status message but keep UI running
-2. ⏳ Add color coding for track status indicators
-3. ⏳ Phase 4: CI/CD setup (GitHub Actions, PyPI distribution)
+1. ⏳ Add color coding for track status indicators
+2. ⏳ Phase 4: CI/CD setup (GitHub Actions, PyPI distribution)
 
 **Recent Changes:**
 - ✅ Implemented `get_base_branch()` to detect upstream/base branch (commit b4162ee)
@@ -406,11 +401,11 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 - ✅ Added conditional confirmation for delete - only when branch differs from upstream (commit 18d28d2)
   - No confirmation when track_status == "=" (synced with upstream)
   - Shows confirmation dialog with context for unsynced branches
-- Tests: 52 passing, coverage 77.68%
-
-**New Requirement:**
-- Delete should NOT exit the program
-- Should update the branch list to remove deleted branch
-- Allows deleting multiple branches in one session
+- ✅ Delete now updates branch list and stays in UI (commit b013e28)
+  - Removes deleted branch from list
+  - Cancels pending metadata workers
+  - Adjusts cursor position
+  - Allows multiple deletions per session
+- Tests: 52 passing, coverage 74.67%
 
 **Process Note:** This implementation plan is updated with each step to maintain accurate project status.
