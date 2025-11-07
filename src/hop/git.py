@@ -287,14 +287,16 @@ def rebase_to_branch(branch_name: str) -> None:
 
 
 def delete_branch(branch_name: str) -> None:
-    """Delete the specified branch.
+    """Delete the specified branch (force delete).
+
+    Uses git branch -D to force delete the branch, regardless of merge status.
+    This suppresses the "not fully merged" error.
 
     Args:
         branch_name: Name of the branch to delete
 
     Raises:
-        RuntimeError: If deletion fails (e.g., trying to delete current branch,
-                     branch has unmerged changes, etc.)
+        RuntimeError: If deletion fails (e.g., trying to delete current branch)
     """
     # Check if trying to delete the current branch
     try:
@@ -309,8 +311,10 @@ def delete_branch(branch_name: str) -> None:
                 "Please checkout another branch first."
             )
 
+    # Use -D (force delete) instead of -d (safe delete)
+    # This allows deleting branches that aren't fully merged
     result = subprocess.run(
-        ["git", "branch", "-d", branch_name],
+        ["git", "branch", "-D", branch_name],
         capture_output=True,
         text=True,
         check=False,

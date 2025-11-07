@@ -53,22 +53,35 @@ class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
     }
     """
 
-    def __init__(self, branch_name: str, track_status: str) -> None:
+    def __init__(self, branch_name: str, track_status: str, is_merged: bool) -> None:
         super().__init__()
         self.branch_name = branch_name
         self.track_status = track_status
+        self.is_merged = is_merged
 
     def compose(self) -> ComposeResult:
         """Compose the confirmation dialog."""
         status_msg = ""
-        if self.track_status == ">":
-            status_msg = "\nThis branch is ahead of upstream (has unpushed commits)."
-        elif self.track_status == "<":
-            status_msg = "\nThis branch is behind upstream."
-        elif self.track_status == "<>":
-            status_msg = "\nThis branch has diverged from upstream."
-        elif not self.track_status:
-            status_msg = "\nThis branch has no upstream configured."
+
+        # Show warning based on merge status and track status
+        if not self.is_merged:
+            status_msg = "\n⚠️  WARNING: This branch is NOT fully merged to upstream."
+            if self.track_status == ">":
+                status_msg += "\nIt has unpushed commits that will be lost."
+            elif self.track_status == "<>":
+                status_msg += "\nIt has diverged from upstream."
+            elif not self.track_status:
+                status_msg += "\nIt has no upstream configured."
+        else:
+            # Branch is merged
+            if self.track_status == ">":
+                status_msg = "\nThis branch has unpushed commits (but is merged to upstream)."
+            elif self.track_status == "<":
+                status_msg = "\nThis branch is behind upstream."
+            elif self.track_status == "<>":
+                status_msg = "\nThis branch has diverged from upstream."
+            elif not self.track_status:
+                status_msg = "\nThis branch has no upstream configured."
 
         with Container(id="confirm-dialog"):
             yield Label(
@@ -294,7 +307,7 @@ class HopApp(App[None]):
         else:
             # Show confirmation dialog - pass cursor_row through
             self.push_screen(
-                ConfirmDeleteScreen(branch.name, branch.track_status),
+                ConfirmDeleteScreen(branch.name, branch.track_status, branch.is_merged),
                 lambda confirmed: self._handle_delete_confirmation(
                     confirmed, branch.name, cursor_row
                 ),
