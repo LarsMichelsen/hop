@@ -321,14 +321,19 @@ def test_hop_app_action_delete_success(sample_branches: list[BranchInfo]) -> Non
     # Mock query_one to return a mock BranchList
     mock_branch_list = Mock()
     mock_branch_list.cursor_row = 1
+    mock_branch_list.remove_branch = Mock()
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.exit = Mock()  # type: ignore[method-assign]
+    app.show_status = Mock()  # type: ignore[method-assign]
 
     with patch("hop.ui.delete_branch"):
         app.action_delete()
 
-        # Should exit after successful delete (no confirmation needed)
-        app.exit.assert_called_once()
+        # Should remove branch from list (no confirmation needed)
+        mock_branch_list.remove_branch.assert_called_once_with(1)
+        # Should show status
+        app.show_status.assert_called_once()
+        # Branch should be removed from app's list
+        assert len(app.branches) == 1
 
 
 def test_hop_app_action_delete_with_confirmation(sample_branches: list[BranchInfo]) -> None:
@@ -374,17 +379,19 @@ def test_hop_app_action_delete_error(sample_branches: list[BranchInfo]) -> None:
     # Mock query_one to return a mock BranchList
     mock_branch_list = Mock()
     mock_branch_list.cursor_row = 1
+    mock_branch_list.remove_branch = Mock()
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
     app.show_status = Mock()  # type: ignore[method-assign]
-    app.exit = Mock()  # type: ignore[method-assign]
 
     with patch("hop.ui.delete_branch", side_effect=RuntimeError("Delete failed")):
         app.action_delete()
 
         # Should show error status
         app.show_status.assert_called_once_with("Error: Delete failed")
-        # Should not exit
-        app.exit.assert_not_called()
+        # Should not remove branch from list
+        mock_branch_list.remove_branch.assert_not_called()
+        # Branch count should be unchanged
+        assert len(app.branches) == 2
 
 
 def test_hop_app_action_delete_invalid_cursor(sample_branches: list[BranchInfo]) -> None:

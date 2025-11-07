@@ -148,6 +148,26 @@ class BranchList(DataTable):  # type: ignore[misc]
         self.update_cell_at((row_index, 2), branch_name)  # type: ignore[arg-type,misc]
         self.update_cell_at((row_index, 3), branch.last_commit_message)  # type: ignore[arg-type,misc]
 
+    def remove_branch(self, row_index: int) -> None:
+        """Remove a branch from the list and table.
+
+        Args:
+            row_index: Index of the branch/row to remove
+        """
+        if row_index < 0 or row_index >= len(self.branches):
+            return
+
+        # Remove from internal list
+        del self.branches[row_index]
+
+        # Remove row from table
+        row_key = self.get_row_at(row_index)[0]  # type: ignore[misc]
+        self.remove_row(row_key)  # type: ignore[misc]
+
+        # Adjust cursor if needed
+        if self.cursor_row >= len(self.branches) and len(self.branches) > 0:
+            self.cursor_row = len(self.branches) - 1  # type: ignore[misc]
+
 
 class HopApp(App[None]):
     """Interactive git branch manager."""
@@ -287,11 +307,30 @@ class HopApp(App[None]):
 
     def _perform_delete(self, branch_name: str) -> None:
         """Perform the actual branch deletion."""
+        # Get the current cursor position before deletion
+        branch_list = self.query_one(BranchList)
+        cursor_row = branch_list.cursor_row
+
+        if cursor_row < 0 or cursor_row >= len(self.branches):
+            return
+
         try:
             delete_branch(branch_name)
+
+            # Remove from branches list and update UI
+            branch_list.remove_branch(cursor_row)
+
+            # Also remove from app's branches list
+            del self.branches[cursor_row]
+
+            # Also cancel any pending metadata workers for this branch
+            if cursor_row < len(self.metadata_workers):
+                worker = self.metadata_workers[cursor_row]
+                worker.cancel()  # type: ignore[misc]
+                del self.metadata_workers[cursor_row]
+
             self.show_status(f"Deleted branch: {branch_name}")
-            # Exit after successful delete
-            self.exit()
+            # Do NOT exit - stay in UI for more operations
         except RuntimeError as e:
             self.show_status(f"Error: {e}")
 
