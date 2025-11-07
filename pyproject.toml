@@ -1,0 +1,50 @@
+[project]
+name = "hop"
+version = "0.1.0"
+description = "Git branch management tool for quick branch hopping"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "textual>=6.5.0",
+]
+
+[project.scripts]
+hop = "hop.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[tool.basedpyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.14"
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.33.0",
+    "pytest>=8.4.2",
+    "ruff>=0.14.4",
+]
