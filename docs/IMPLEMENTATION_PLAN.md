@@ -1,5 +1,9 @@
 # Implementation Plan for hop
 
+**NOTE:** This plan is updated with each implementation step to track progress.
+
+**Last Updated:** 2025-11-07
+
 ## Project Overview
 
 **hop** is a git branch management tool that provides an interactive text-based UI for quick branch navigation and operations.
@@ -11,6 +15,22 @@ The project is organized into three main modules:
 1. **`hop.git`** - Git operations and data models
 2. **`hop.ui`** - Interactive terminal UI
 3. **`hop.main`** - Entry point and orchestration
+
+## Current Status Summary
+
+### ✅ Completed
+- Phase 1: Git operations (fast branch retrieval, metadata loading, basic operations)
+- Phase 2: Interactive UI (Textual-based TUI, progressive loading, navigation, key bindings)
+- Phase 3: Integration (main entry point, async coordination, comprehensive testing)
+- Test coverage: 86.83% (46 tests)
+
+### 🚧 In Progress
+- **Fixing rebase feature** - Currently rebases TO selected branch, should rebase selected branch to its upstream
+
+### ⏳ Pending
+- Confirmation dialogs for destructive actions
+- Color coding for track status indicators
+- Phase 4: CI/CD setup
 
 ## Performance Requirements
 
@@ -62,7 +82,7 @@ class BranchInfo:
 
 #### Tasks:
 
-1. **Fast Branch Information Retrieval (Synchronous)**
+1. **Fast Branch Information Retrieval (Synchronous)** ✅ COMPLETED
    - Implement `get_branches_fast()` to return immediately with basic data
    - Use single optimized git command:
      ```
@@ -75,7 +95,7 @@ class BranchInfo:
    - **Target:** < 100ms even for repos with 100+ branches
    - Note: This matches the user's existing `git brv` format but without track status (loaded async)
 
-2. **Async Upstream and Track Status Loading**
+2. **Async Upstream and Track Status Loading** ✅ COMPLETED
    - Implement `fetch_branch_metadata(branch: BranchInfo) -> BranchInfo`
    - For each branch, use git command to get upstream and track status:
      ```
@@ -89,17 +109,32 @@ class BranchInfo:
    - Return updated BranchInfo with is_loading=False
    - Can be called per-branch from async context
 
-3. **Batch Metadata Loading (Optional Optimization)**
-   - Implement `fetch_all_metadata(branches: list[BranchInfo]) -> AsyncIterator[BranchInfo]`
-   - Use ThreadPoolExecutor or asyncio to process branches concurrently
-   - Yield updated BranchInfo objects as they complete
-   - Limit concurrency to avoid overwhelming git
+3. **Batch Metadata Loading (Optional Optimization)** ⏭️ SKIPPED (using Textual workers instead)
+   - ~~Implement `fetch_all_metadata(branches: list[BranchInfo]) -> AsyncIterator[BranchInfo]`~~
+   - Using Textual's @work decorator for concurrent metadata fetching
 
-4. **Branch Operations**
-   - Implement `checkout_branch(name)` using `git checkout`
-   - Implement `rebase_to_branch(name)` using `git rebase`
-   - Implement `delete_branch(name)` using `git branch -d` (safe delete)
-   - Add proper error handling for each operation
+4. **Branch Operations** ⚠️ PARTIALLY COMPLETED
+   - ✅ Implement `checkout_branch(name)` using `git checkout`
+   - ❌ **INCORRECT**: `rebase_to_branch(name)` - currently rebases TO branch, needs fix
+   - ✅ Implement `delete_branch(name)` using `git branch -d` (safe delete)
+   - ✅ Add proper error handling for each operation
+
+5. **NEW: Detect Base/Upstream Branch** 🚧 IN PROGRESS
+   - Implement `get_base_branch(branch_name: str) -> str | None`
+   - Try multiple strategies to find the base branch:
+     1. Use configured upstream if available
+     2. Find merge-base with common branches (main, master, develop)
+     3. Fallback to None if cannot determine
+   - This is needed for proper rebase behavior
+
+6. **FIX: Rebase Operation** 🚧 NEXT STEP
+   - Update `rebase_to_branch(name)` to:
+     1. Detect the base/upstream branch of the selected branch
+     2. Checkout the selected branch
+     3. Rebase the selected branch to its base branch
+   - Example: Branch `xyz` branched from `master` with 3 commits
+     - Should execute: `git checkout xyz && git rebase master`
+     - NOT: `git rebase xyz` (current incorrect behavior)
 
 #### Dependencies:
 - Use `subprocess` module to execute git commands
@@ -133,7 +168,7 @@ class BranchInfo:
 
 #### Tasks:
 
-1. **Initial Fast Display**
+1. **Initial Fast Display** ✅ COMPLETED
    - Show branch list immediately with basic data (name, date, message)
    - Display format matching `git brv` output:
      ```
@@ -149,13 +184,13 @@ class BranchInfo:
    - **Critical:** UI must render within milliseconds of receiving initial data
    - Show loading indicator in track status column until async data arrives
 
-2. **Progressive Data Loading**
+2. **Progressive Data Loading** ✅ COMPLETED
    - Show loading indicators for track status initially (e.g., `··` or `--`)
    - Update individual rows as metadata becomes available
    - Use reactive properties to automatically refresh display
    - Smooth transitions - no jarring redraws
 
-3. **Branch Status Display with Color**
+3. **Branch Status Display with Color** ⏳ PENDING
    - Track status indicators with semantic colors:
      - `=` in green (synced with upstream)
      - `<` in yellow (behind, needs pull)
@@ -165,27 +200,27 @@ class BranchInfo:
    - Current branch in bold or different color
    - Use subtle visual cues for loading state
 
-4. **Additional "Awesome" Features**
+4. **Additional "Awesome" Features** ⏳ FUTURE
    - Show total branch count and loading progress at top
    - Filter/search branches by typing (optional future enhancement)
    - Show tooltips with full upstream branch name on hover/selection
    - Visual feedback for actions (smooth transitions)
    - Maybe show ahead/behind commit counts when available
 
-5. **Navigation**
+5. **Navigation** ✅ COMPLETED
    - Implement arrow key navigation (↑/↓)
    - Implement vim-style navigation (j/k)
    - Handle scrolling for long branch lists
    - Navigation should work immediately, even while data loads
 
-6. **Actions**
-   - Bind `c` key to checkout action
-   - Bind `r` key to rebase action
-   - Bind `d` key to delete action
-   - Bind `q` key to quit
-   - Show confirmation dialog for destructive actions (delete, rebase)
+6. **Actions** ⚠️ PARTIALLY COMPLETED
+   - ✅ Bind `c` key to checkout action
+   - ⚠️ Bind `r` key to rebase action (needs fix)
+   - ✅ Bind `d` key to delete action
+   - ✅ Bind `q` key to quit
+   - ⏳ Show confirmation dialog for destructive actions (delete, rebase) - PENDING
 
-6. **Status Display**
+7. **Status Display** ✅ COMPLETED
    - Show current branch indicator
    - Show action feedback (success/error messages)
    - Display count of branches still loading metadata
@@ -206,40 +241,40 @@ class BranchInfo:
 
 #### Tasks:
 
-1. **Main Entry Point with Async Flow**
+1. **Main Entry Point with Async Flow** ✅ COMPLETED
    - Initial load: `get_branches_fast()` → display immediately in UI
    - Background task: spawn async metadata loading
    - Update UI progressively as metadata arrives
    - Handle errors gracefully (not in git repo, no branches, etc.)
    - Add command-line argument parsing if needed (e.g., `--help`)
 
-2. **Async Coordination**
+2. **Async Coordination** ✅ COMPLETED
    - Set up async event loop (textual handles this)
    - Spawn metadata fetching tasks in background
    - Update UI state as each branch's metadata completes
    - Handle cancellation if user quits during loading
 
-3. **Error Handling**
+3. **Error Handling** ✅ COMPLETED
    - Check if current directory is a git repository
    - Handle git command failures gracefully
    - Show user-friendly error messages
    - Handle errors in async metadata loading (don't crash, just mark as unavailable)
 
-4. **Edge Cases**
+4. **Edge Cases** ✅ COMPLETED
    - Handle repository with no branches
    - Handle repository with only one branch
    - Handle detached HEAD state
    - Handle branches being deleted externally during session
    - Handle slow git commands (show progress)
 
-5. **Performance Validation**
+5. **Performance Validation** ✅ COMPLETED
    - Measure time to first paint (target: < 100ms)
    - Test with large repos (100+ branches)
    - Profile async metadata loading
    - Ensure UI stays responsive during background loading
    - Consider limiting concurrent git operations
 
-6. **Documentation**
+6. **Documentation** ✅ COMPLETED
    - Update README with installation instructions
    - Add usage examples
    - Document keyboard shortcuts
@@ -318,21 +353,23 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 
 ## Success Criteria
 
-- [ ] **Performance:** Displays branch list in < 100ms for typical repos
-- [ ] **Performance:** UI is immediately interactive, even while data loads
-- [ ] Lists all local branches sorted by commit date
-- [ ] Shows branch name, date, and last commit message immediately
-- [ ] Progressively loads and displays upstream branch for each branch
-- [ ] Progressively loads and indicates merged branches
-- [ ] Supports navigation with arrow keys and j/k
-- [ ] Can checkout branch with `c`
-- [ ] Can rebase with `r`
-- [ ] Can delete branch with `d`
-- [ ] Handles errors gracefully
-- [ ] All tests pass
-- [ ] Type checking passes (strict mode)
-- [ ] Works in real-world git repositories
-- [ ] Smooth UX with loading indicators for async data
+- [x] **Performance:** Displays branch list in < 100ms for typical repos
+- [x] **Performance:** UI is immediately interactive, even while data loads
+- [x] Lists all local branches sorted by commit date
+- [x] Shows branch name, date, and last commit message immediately
+- [x] Progressively loads and displays upstream branch for each branch
+- [x] Progressively loads and indicates merged branches
+- [x] Supports navigation with arrow keys and j/k
+- [x] Can checkout branch with `c`
+- [ ] Can rebase with `r` - **IN PROGRESS: Fixing to use upstream branch**
+- [x] Can delete branch with `d`
+- [x] Handles errors gracefully
+- [x] All tests pass (46 tests, 86.83% coverage)
+- [x] Type checking passes (strict mode)
+- [x] Works in real-world git repositories
+- [x] Smooth UX with loading indicators for async data
+- [ ] Confirmation dialogs for destructive actions - PENDING
+- [ ] Color-coded track status indicators - PENDING
 
 ---
 
@@ -349,7 +386,11 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 
 ## Next Steps
 
-1. Decide on UI library (curses vs textual)
-2. Start with Phase 1: Implement `get_branches()`
-3. Set up basic test infrastructure
-4. Iteratively build out features
+**Current Priority:**
+1. 🚧 Implement `get_base_branch()` to detect upstream/base branch
+2. 🚧 Fix `rebase_to_branch()` to rebase selected branch to its upstream
+3. ⏳ Add confirmation dialogs for destructive actions (rebase, delete)
+4. ⏳ Add color coding for track status indicators
+5. ⏳ Phase 4: CI/CD setup (GitHub Actions, PyPI distribution)
+
+**Process Note:** This implementation plan is updated with each step to maintain accurate project status.
