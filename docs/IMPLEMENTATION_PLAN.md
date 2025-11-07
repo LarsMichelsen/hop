@@ -215,12 +215,13 @@ class BranchInfo:
    - Handle scrolling for long branch lists
    - Navigation should work immediately, even while data loads
 
-6. **Actions** ✅ COMPLETED
-   - ✅ Bind `c` key to checkout action
-   - ✅ Bind `r` key to rebase action (FIXED - now uses upstream)
-   - ✅ Bind `d` key to delete action with conditional confirmation
+6. **Actions** ⚠️ PARTIALLY COMPLETED
+   - ✅ Bind `c` key to checkout action (exits after checkout)
+   - ✅ Bind `r` key to rebase action (exits after rebase - FIXED - now uses upstream)
+   - ⚠️ Bind `d` key to delete action with conditional confirmation (IN PROGRESS - should NOT exit)
    - ✅ Bind `q` key to quit
    - ✅ Conditional confirmation for delete (only when branch differs from upstream)
+   - 🚧 **NEW REQUIREMENT**: Delete should update branch list and stay in UI (not exit)
 
 7. **Status Display** ✅ COMPLETED
    - Show current branch indicator
@@ -364,13 +365,14 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 - [x] Supports navigation with arrow keys and j/k
 - [x] Can checkout branch with `c`
 - [x] Can rebase with `r` - **COMPLETED: Now rebases selected branch to its upstream**
-- [x] Can delete branch with `d` with conditional confirmation
+- [ ] Can delete branch with `d` - **IN PROGRESS: Should update list, not exit**
 - [x] Handles errors gracefully
 - [x] All tests pass (52 tests, 77.68% coverage)
 - [x] Type checking passes (strict mode)
 - [x] Works in real-world git repositories
 - [x] Smooth UX with loading indicators for async data
 - [x] Conditional confirmation for delete (only when differs from upstream)
+- [ ] Delete updates branch list and stays in UI - **IN PROGRESS**
 - [ ] Color-coded track status indicators - PENDING
 
 ---
@@ -389,8 +391,13 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 ## Next Steps
 
 **Current Priority:**
-1. ⏳ Add color coding for track status indicators
-2. ⏳ Phase 4: CI/CD setup (GitHub Actions, PyPI distribution)
+1. 🚧 **FIX**: Delete should update branch list and stay in UI (not exit)
+   - Remove deleted branch from internal list
+   - Remove row from DataTable
+   - Adjust cursor position if needed
+   - Show status message but keep UI running
+2. ⏳ Add color coding for track status indicators
+3. ⏳ Phase 4: CI/CD setup (GitHub Actions, PyPI distribution)
 
 **Recent Changes:**
 - ✅ Implemented `get_base_branch()` to detect upstream/base branch (commit b4162ee)
@@ -400,5 +407,10 @@ Using `textual` for the TUI framework - provides async support, reactive updates
   - No confirmation when track_status == "=" (synced with upstream)
   - Shows confirmation dialog with context for unsynced branches
 - Tests: 52 passing, coverage 77.68%
+
+**New Requirement:**
+- Delete should NOT exit the program
+- Should update the branch list to remove deleted branch
+- Allows deleting multiple branches in one session
 
 **Process Note:** This implementation plan is updated with each step to maintain accurate project status.
