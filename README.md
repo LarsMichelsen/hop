@@ -33,8 +33,6 @@ hop
 
 ## Development
 
-### Quick Start
-
 ```bash
 # Install dependencies
 uv sync
@@ -43,27 +41,4 @@ uv sync
 uv run hop
 ```
 
-### Development Workflow
-
-**Before every commit, run all checks:**
-
-```bash
-# Format code
-uv run ruff format
-
-# Lint and fix issues
-uv run ruff check --fix
-
-# Type check (strict mode)
-uv run basedpyright
-
-# Run tests
-uv run pytest
-```
-
-Or run all at once:
-```bash
-uv run ruff format && uv run ruff check --fix && uv run basedpyright && uv run pytest
-```
-
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development workflow.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow and pre-commit checks.

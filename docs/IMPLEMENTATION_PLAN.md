@@ -316,36 +316,6 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 
 ---
 
-## Development Workflow
-
-**Mandatory checks before every commit:**
-
-1. **Format code:** `uv run ruff format`
-2. **Lint and fix:** `uv run ruff check --fix`
-3. **Type check:** `uv run basedpyright` (must pass, strict mode)
-4. **Run tests:** `uv run pytest` (all tests must pass)
-
-**Development cycle:**
-
-1. Implement feature in module
-2. Write unit tests
-3. Run formatting: `uv run ruff format`
-4. Run linting: `uv run ruff check --fix`
-5. Run type checking: `uv run basedpyright` (strict mode, must pass)
-6. Run tests: `uv run pytest` (all must pass)
-7. Manual testing with real git repos
-8. Commit only if all checks pass
-9. Iterate
-
-**One-liner for all checks:**
-```bash
-uv run ruff format && uv run ruff check --fix && uv run basedpyright && uv run pytest
-```
-
-See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed workflow documentation.
-
----
-
 ## Success Criteria
 
 - [ ] **Performance:** Displays branch list in < 100ms for typical repos
