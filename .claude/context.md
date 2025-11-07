@@ -21,7 +21,7 @@ uv run ruff check --fix
 
 ### 3. Type Check (Strict Mode)
 ```bash
-uv run basedpyright
+uv run python -m basedpyright
 ```
 - Runs strict type checking
 - MUST pass with ZERO errors
@@ -29,7 +29,7 @@ uv run basedpyright
 
 ### 4. Run All Tests
 ```bash
-uv run pytest
+uv run python -m pytest
 ```
 - Runs all unit tests
 - ALL tests MUST pass
@@ -39,7 +39,7 @@ uv run pytest
 
 Run this before every commit:
 ```bash
-uv run ruff format && uv run ruff check --fix && uv run basedpyright && uv run pytest
+uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright && uv run python -m pytest
 ```
 
 ## Workflow
@@ -62,9 +62,11 @@ uv run ruff format && uv run ruff check --fix && uv run basedpyright && uv run p
 **MANDATORY:** After each significant change where all checks pass, you MUST create a git commit automatically:
 
 1. **Run all pre-commit checks** (format, lint, type check, tests)
-2. **If all checks pass**, immediately create a commit
-3. **No user confirmation needed** - commit automatically
-4. **Commit message format:**
+2. **STOP IMMEDIATELY if ANY check fails** - do not proceed to commit
+3. **Fix the failure** and re-run all checks from the beginning
+4. **Only when ALL checks pass**, immediately create a commit
+5. **No user confirmation needed** - commit automatically when checks pass
+6. **Commit message format:**
    - Clear, concise description of changes
 
 **What counts as "significant change":**
@@ -79,7 +81,7 @@ uv run ruff format && uv run ruff check --fix && uv run basedpyright && uv run p
 **Example workflow:**
 ```bash
 # After making changes
-uv run ruff format && uv run ruff check --fix && uv run basedpyright && uv run pytest
+uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright && uv run python -m pytest
 
 # If all pass, immediately commit
 git add .

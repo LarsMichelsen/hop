@@ -39,7 +39,7 @@ uv run ruff check
 
 Run strict type checking:
 ```bash
-uv run basedpyright
+uv run python -m basedpyright
 ```
 
 Must pass with zero errors.
@@ -48,17 +48,17 @@ Must pass with zero errors.
 
 Run all tests:
 ```bash
-uv run pytest
+uv run python -m pytest
 ```
 
 Run with verbose output:
 ```bash
-uv run pytest -v
+uv run python -m pytest -v
 ```
 
 Run with coverage:
 ```bash
-uv run pytest --cov=hop --cov-report=term-missing
+uv run python -m pytest --cov=hop --cov-report=term-missing
 ```
 
 ## Complete Pre-Commit Workflow
@@ -73,10 +73,10 @@ uv run ruff format
 uv run ruff check --fix
 
 # 3. Type check
-uv run ruff check && uv run basedpyright
+uv run python -m basedpyright
 
 # 4. Run tests
-uv run pytest
+uv run python -m pytest
 
 # If all pass, commit
 git add .
@@ -85,7 +85,7 @@ git commit -m "Your commit message"
 
 Or use this one-liner to run all checks:
 ```bash
-uv run ruff format && uv run ruff check --fix && uv run basedpyright && uv run pytest
+uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright && uv run python -m pytest
 ```
 
 ## Development Cycle
@@ -93,8 +93,8 @@ uv run ruff format && uv run ruff check --fix && uv run basedpyright && uv run p
 1. **Write code** - Implement feature or fix
 2. **Format** - `uv run ruff format`
 3. **Lint** - `uv run ruff check --fix`
-4. **Type check** - `uv run basedpyright`
-5. **Test** - `uv run pytest`
+4. **Type check** - `uv run python -m basedpyright`
+5. **Test** - `uv run python -m pytest`
 6. **Commit** - Only if all checks pass
 
 ## Coding Standards
