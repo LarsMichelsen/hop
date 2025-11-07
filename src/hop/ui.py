@@ -182,9 +182,10 @@ class HopApp(App[None]):
     #status {
         dock: bottom;
         height: 1;
-        background: $panel;
+        background: $boost;
         color: $text;
         padding: 0 1;
+        text-style: bold;
     }
     """
 
@@ -206,8 +207,8 @@ class HopApp(App[None]):
         """Compose the UI."""
         yield Header()
         yield BranchList(self.branches)
-        yield Static("", id="status")
         yield Footer()
+        yield Static("Ready", id="status")
 
     def on_mount(self) -> None:
         """Start loading metadata when app is mounted."""

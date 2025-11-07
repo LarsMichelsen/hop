@@ -154,6 +154,46 @@ def test_hop_app_show_status(sample_branches: list[BranchInfo]) -> None:
     mock_static.update.assert_called_once_with("Test message")
 
 
+def test_delete_shows_status_message(sample_branches: list[BranchInfo]) -> None:
+    """Test that delete action shows status message."""
+    # Create a synced branch (so no confirmation)
+    synced_branch = BranchInfo(
+        name="feature",
+        creator_date=sample_branches[1].creator_date,
+        last_commit_message="Add feature",
+        upstream="origin/feature",
+        track_status="=",
+        is_loading=False,
+    )
+    branches = [sample_branches[0], synced_branch]
+    app = HopApp(branches)
+
+    # Mock query_one to return a mock BranchList
+    mock_branch_list = Mock()
+    mock_branch_list.cursor_row = 1
+
+    def remove_side_effect(idx: int) -> None:
+        branches.pop(idx)
+
+    mock_branch_list.remove_branch = Mock(side_effect=remove_side_effect)
+
+    # Track calls to show_status
+    status_messages: list[str] = []
+
+    def capture_status(msg: str) -> None:
+        status_messages.append(msg)
+
+    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    app.show_status = Mock(side_effect=capture_status)  # type: ignore[method-assign]
+
+    with patch("hop.ui.delete_branch"):
+        app.action_delete()
+
+    # Should show status message with branch name
+    assert len(status_messages) == 1
+    assert "Deleted branch: feature" in status_messages[0]
+
+
 def test_hop_app_action_cursor_down(sample_branches: list[BranchInfo]) -> None:
     """Test cursor down action."""
     app = HopApp(sample_branches)
@@ -321,6 +361,7 @@ def test_hop_app_action_delete_success(sample_branches: list[BranchInfo]) -> Non
     # Mock query_one to return a mock BranchList
     mock_branch_list = Mock()
     mock_branch_list.cursor_row = 1
+
     # Make remove_branch actually delete from the list
     def remove_side_effect(idx: int) -> None:
         branches.pop(idx)
