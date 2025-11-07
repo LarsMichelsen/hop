@@ -3,6 +3,7 @@
 import contextlib
 from typing import ClassVar
 
+from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
@@ -110,6 +111,35 @@ class BranchList(DataTable):  # type: ignore[misc]
         with contextlib.suppress(RuntimeError):
             self.current_branch = get_current_branch()
 
+    def _format_status(self, branch: BranchInfo) -> Text:
+        """Format track status with color coding.
+
+        Color scheme:
+        - = (synced): green
+        - < (behind): yellow
+        - > (ahead): cyan
+        - <> (diverged): red
+        - -- (loading): dim white
+        - (no upstream): dim white
+        """
+        if branch.is_loading:
+            return Text("--", style="dim white")
+
+        status = branch.track_status if branch.track_status else "  "
+
+        # Apply colors based on track status
+        if status == "=":
+            return Text(status, style="green")
+        elif status == "<":
+            return Text(status, style="yellow")
+        elif status == ">":
+            return Text(status, style="cyan")
+        elif status == "<>":
+            return Text(status, style="red")
+        else:
+            # No upstream or empty status
+            return Text(status, style="dim white")
+
     def on_mount(self) -> None:
         """Set up the table when mounted."""
         self.cursor_type = "row"
@@ -131,7 +161,7 @@ class BranchList(DataTable):  # type: ignore[misc]
         date_str = branch.creator_date.strftime("%Y-%m-%d")
 
         # Track status with color
-        status = "--" if branch.is_loading else branch.track_status if branch.track_status else "  "
+        status = self._format_status(branch)
 
         # Branch name - highlight current branch
         branch_name = branch.name
@@ -150,7 +180,7 @@ class BranchList(DataTable):  # type: ignore[misc]
 
         # Update the row
         date_str = branch.creator_date.strftime("%Y-%m-%d")
-        status = branch.track_status if branch.track_status else "  "
+        status = self._format_status(branch)
         branch_name = branch.name
         if branch.name == self.current_branch:
             branch_name = f"* {branch_name}"
@@ -170,11 +200,12 @@ class BranchList(DataTable):  # type: ignore[misc]
         if row_index < 0 or row_index >= len(self.branches):
             return
 
-        # Get the actual Row object which contains the RowKey
-        row = self.get_row_at(row_index)  # type: ignore[misc]
+        # Get the RowKey at the specified index from the ordered rows list
+        # ordered_rows is a list of RowKey objects in the order they appear in the table
+        row_key = list(self.ordered_rows)[row_index]  # type: ignore[misc]
 
-        # Remove row from table using the Row's key attribute
-        self.remove_row(row.key)  # type: ignore[misc]
+        # Remove row from table using the RowKey
+        self.remove_row(row_key)  # type: ignore[misc]
 
         # Remove from internal list
         del self.branches[row_index]

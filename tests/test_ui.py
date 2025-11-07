@@ -4,6 +4,7 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 import pytest
+from rich.text import Text
 from textual.widgets import Static
 
 from hop.git import BranchInfo
@@ -59,7 +60,9 @@ def test_branch_list_add_branch_row(sample_branches: list[BranchInfo]) -> None:
         branch_list.add_row.assert_called_once()
         call_args = branch_list.add_row.call_args[0]
         assert call_args[0] == "2025-01-01"  # date
-        assert call_args[1] == "--"  # status (loading)
+        # Status is now a Text object
+        assert isinstance(call_args[1], Text)
+        assert call_args[1].plain == "--"  # status (loading)
         assert call_args[2] == "* main"  # branch name with current marker
         assert call_args[3] == "Initial commit"  # commit message
 
@@ -86,7 +89,9 @@ def test_branch_list_add_branch_row_with_status(sample_branches: list[BranchInfo
         branch_list._add_branch_row(sample_branches[1])  # pyright: ignore[reportPrivateUsage]
 
         call_args = branch_list.add_row.call_args[0]
-        assert call_args[1] == "="  # track status
+        # Status is now a Text object with green color
+        assert isinstance(call_args[1], Text)
+        assert call_args[1].plain == "="  # track status
 
 
 def test_branch_list_update_branch(sample_branches: list[BranchInfo]) -> None:
