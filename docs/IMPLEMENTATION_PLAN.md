@@ -409,6 +409,11 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 - ✅ Fixed deletion bugs (commit 9c3a527)
   - Fixed order: get row key before deletion
   - Fixed double deletion bug (shared list reference)
-- Tests: 52 passing, coverage 74.60%
+- ✅ Fixed production deletion issue (commit 755ab48)
+  - Capture branch index at action time
+  - Pass index through confirmation flow
+  - Verify branch name matches before deletion
+  - Prevents deleting wrong branch if cursor moves
+- Tests: 52 passing, coverage 75.27%
 
 **Process Note:** This implementation plan is updated with each step to maintain accurate project status.
