@@ -289,46 +289,57 @@ class HopApp(App[None]):
         # If branch is synced with upstream (track_status == "="), delete without confirmation
         # Otherwise, show confirmation dialog
         if branch.track_status == "=" and not branch.is_loading:
-            self._perform_delete(branch.name)
+            self._perform_delete(branch.name, cursor_row)
         else:
-            # Show confirmation dialog
+            # Show confirmation dialog - pass cursor_row through
             self.push_screen(
                 ConfirmDeleteScreen(branch.name, branch.track_status),
-                self._handle_delete_confirmation,
+                lambda confirmed: self._handle_delete_confirmation(
+                    confirmed, branch.name, cursor_row
+                ),
             )
 
-    def _handle_delete_confirmation(self, confirmed: bool | None) -> None:
-        """Handle the result of delete confirmation."""
+    def _handle_delete_confirmation(
+        self, confirmed: bool | None, branch_name: str, row_index: int
+    ) -> None:
+        """Handle the result of delete confirmation.
+
+        Args:
+            confirmed: Whether user confirmed the deletion
+            branch_name: Name of the branch to delete
+            row_index: Index of the branch in the list
+        """
         if confirmed is True:
-            branch_list = self.query_one(BranchList)
-            cursor_row = branch_list.cursor_row
-            if cursor_row < 0 or cursor_row >= len(self.branches):
-                return
-            branch = self.branches[cursor_row]
-            self._perform_delete(branch.name)
+            self._perform_delete(branch_name, row_index)
 
-    def _perform_delete(self, branch_name: str) -> None:
-        """Perform the actual branch deletion."""
-        # Get the current cursor position before deletion
-        branch_list = self.query_one(BranchList)
-        cursor_row = branch_list.cursor_row
+    def _perform_delete(self, branch_name: str, row_index: int) -> None:
+        """Perform the actual branch deletion.
 
-        if cursor_row < 0 or cursor_row >= len(self.branches):
+        Args:
+            branch_name: Name of the branch to delete
+            row_index: Index of the branch in the list at the time of action
+        """
+        # Verify the branch at row_index still matches the name
+        if row_index < 0 or row_index >= len(self.branches):
+            self.show_status("Error: Branch index out of range")
+            return
+
+        if self.branches[row_index].name != branch_name:
+            self.show_status("Error: Branch list changed, please try again")
             return
 
         try:
             delete_branch(branch_name)
 
             # Cancel any pending metadata workers for this branch BEFORE removing
-            if cursor_row < len(self.metadata_workers):
-                worker = self.metadata_workers[cursor_row]
+            if row_index < len(self.metadata_workers):
+                worker = self.metadata_workers[row_index]
                 worker.cancel()  # type: ignore[misc]
-                del self.metadata_workers[cursor_row]
+                del self.metadata_workers[row_index]
 
             # Remove from branches list and update UI
-            # Note: This updates both branch_list.branches AND self.branches
-            # because they reference the same list object
-            branch_list.remove_branch(cursor_row)
+            branch_list = self.query_one(BranchList)
+            branch_list.remove_branch(row_index)
 
             self.show_status(f"Deleted branch: {branch_name}")
             # Do NOT exit - stay in UI for more operations
