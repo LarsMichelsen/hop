@@ -6,9 +6,9 @@ from typing import ClassVar
 from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal
+from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Footer, Header, Label, Static
+from textual.widgets import Button, DataTable, Footer, Label, Static
 from textual.worker import Worker
 
 from hop.git import (
@@ -19,6 +19,77 @@ from hop.git import (
     get_current_branch,
     rebase_to_branch,
 )
+
+
+class HelpScreen(ModalScreen[None]):  # type: ignore[misc]
+    """Modal screen showing keyboard shortcuts help."""
+
+    CSS = """
+    HelpScreen {
+        align: center middle;
+    }
+
+    #help-dialog {
+        width: 60;
+        height: 20;
+        border: thick $background 80%;
+        background: $surface;
+        padding: 1 2;
+    }
+
+    #help-content {
+        width: 100%;
+        height: 1fr;
+    }
+
+    #help-title {
+        width: 100%;
+        content-align: center middle;
+        margin-bottom: 1;
+        text-style: bold;
+    }
+
+    #close-button-container {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin-top: 1;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        """Compose the help dialog."""
+        with Container(id="help-dialog"):
+            yield Label("Keyboard Shortcuts", id="help-title")
+            with VerticalScroll(id="help-content"):
+                yield Static(
+                    """
+Navigation:
+  ↑/k        Move cursor up
+  ↓/j        Move cursor down
+
+Actions:
+  c          Checkout selected branch
+  r          Rebase current branch to selected branch's upstream
+  d          Delete selected branch (with confirmation)
+  h          Show this help screen
+  q          Quit application
+
+Status Indicators:
+  =          Branch synced with upstream (green)
+  <          Branch behind upstream (yellow)
+  >          Branch ahead of upstream (cyan)
+  <>         Branch diverged from upstream (red)
+  --         Loading metadata...
+  *          Current branch marker
+                    """
+                )
+            with Horizontal(id="close-button-container"):
+                yield Button("Close", variant="primary", id="close")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        self.dismiss()
 
 
 class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
@@ -238,6 +309,7 @@ class HopApp(App[None]):
         ("c", "checkout", "Checkout"),
         ("r", "rebase", "Rebase"),
         ("d", "delete", "Delete"),
+        ("h", "help", "Help"),
         ("q", "quit", "Quit"),
         ("j", "cursor_down", "Down"),
         ("k", "cursor_up", "Up"),
@@ -250,7 +322,6 @@ class HopApp(App[None]):
 
     def compose(self) -> ComposeResult:
         """Compose the UI."""
-        yield Header()
         yield BranchList(self.branches)
         yield Footer()
         yield Static("Ready", id="status")
@@ -290,6 +361,10 @@ class HopApp(App[None]):
         """Move cursor up."""
         branch_list = self.query_one(BranchList)
         branch_list.action_cursor_up()
+
+    def action_help(self) -> None:
+        """Show help screen with keyboard shortcuts."""
+        self.push_screen(HelpScreen())
 
     def action_checkout(self) -> None:
         """Checkout the selected branch."""
