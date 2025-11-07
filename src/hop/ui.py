@@ -170,11 +170,11 @@ class BranchList(DataTable):  # type: ignore[misc]
         if row_index < 0 or row_index >= len(self.branches):
             return
 
-        # Get row key BEFORE modifying anything
-        row_key = self.get_row_at(row_index)[0]  # type: ignore[misc]
+        # Get the actual Row object which contains the RowKey
+        row = self.get_row_at(row_index)  # type: ignore[misc]
 
-        # Remove row from table
-        self.remove_row(row_key)  # type: ignore[misc]
+        # Remove row from table using the Row's key attribute
+        self.remove_row(row.key)  # type: ignore[misc]
 
         # Remove from internal list
         del self.branches[row_index]
