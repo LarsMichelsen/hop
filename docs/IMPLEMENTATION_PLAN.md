@@ -435,6 +435,10 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 - ✅ Fixed TypeError: unhashable type 'Row' in deletion (commit da5e87e)
   - Root cause: ordered_rows contains Row objects, not RowKey directly
   - Solution: Extract row.key from Row object before passing to remove_row()
-- Tests: 53 passing, coverage 71.29%
+- ✅ Removed title bar and added help screen (commit 62cff03)
+  - Removed Header widget for cleaner UI
+  - Added HelpScreen modal with keyboard shortcuts
+  - Press 'h' to show help screen with all commands and status indicators
+- Tests: 53 passing, coverage 70.47%
 
 **Process Note:** This implementation plan is updated with each step to maintain accurate project status.
