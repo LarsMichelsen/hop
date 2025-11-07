@@ -2,7 +2,7 @@
 
 **NOTE:** This plan is updated with each implementation step to track progress.
 
-**Last Updated:** 2025-11-07
+**Last Updated:** 2025-11-07 (after implementing rebase fix)
 
 ## Project Overview
 
@@ -19,13 +19,14 @@ The project is organized into three main modules:
 ## Current Status Summary
 
 ### ✅ Completed
-- Phase 1: Git operations (fast branch retrieval, metadata loading, basic operations)
+- Phase 1: Git operations (fast branch retrieval, metadata loading, all operations including fixed rebase)
 - Phase 2: Interactive UI (Textual-based TUI, progressive loading, navigation, key bindings)
 - Phase 3: Integration (main entry point, async coordination, comprehensive testing)
-- Test coverage: 86.83% (46 tests)
+- **NEW**: Rebase feature now correctly rebases selected branch to its upstream/base
+- Test coverage: 85.91% (50 tests)
 
 ### 🚧 In Progress
-- **Fixing rebase feature** - Currently rebases TO selected branch, should rebase selected branch to its upstream
+- None currently
 
 ### ⏳ Pending
 - Confirmation dialogs for destructive actions
@@ -113,28 +114,29 @@ class BranchInfo:
    - ~~Implement `fetch_all_metadata(branches: list[BranchInfo]) -> AsyncIterator[BranchInfo]`~~
    - Using Textual's @work decorator for concurrent metadata fetching
 
-4. **Branch Operations** ⚠️ PARTIALLY COMPLETED
+4. **Branch Operations** ✅ COMPLETED
    - ✅ Implement `checkout_branch(name)` using `git checkout`
-   - ❌ **INCORRECT**: `rebase_to_branch(name)` - currently rebases TO branch, needs fix
+   - ✅ **FIXED**: `rebase_to_branch(name)` - now correctly rebases selected branch to its upstream
    - ✅ Implement `delete_branch(name)` using `git branch -d` (safe delete)
    - ✅ Add proper error handling for each operation
 
-5. **NEW: Detect Base/Upstream Branch** 🚧 IN PROGRESS
-   - Implement `get_base_branch(branch_name: str) -> str | None`
-   - Try multiple strategies to find the base branch:
-     1. Use configured upstream if available
-     2. Find merge-base with common branches (main, master, develop)
-     3. Fallback to None if cannot determine
-   - This is needed for proper rebase behavior
+5. **NEW: Detect Base/Upstream Branch** ✅ COMPLETED
+   - ✅ Implement `get_base_branch(branch_name: str) -> str | None`
+   - Strategies implemented:
+     1. Use configured upstream if available (extracts local branch from origin/main)
+     2. Find merge-base with common branches (main, master, develop, development)
+     3. Returns None if cannot determine
+   - Used by rebase operation
 
-6. **FIX: Rebase Operation** 🚧 NEXT STEP
-   - Update `rebase_to_branch(name)` to:
+6. **FIX: Rebase Operation** ✅ COMPLETED
+   - ✅ Updated `rebase_to_branch(name)` to:
      1. Detect the base/upstream branch of the selected branch
      2. Checkout the selected branch
      3. Rebase the selected branch to its base branch
    - Example: Branch `xyz` branched from `master` with 3 commits
-     - Should execute: `git checkout xyz && git rebase master`
-     - NOT: `git rebase xyz` (current incorrect behavior)
+     - Now executes: `git checkout xyz && git rebase master` ✅
+     - No longer: `git rebase xyz` ❌
+   - Added proper error message if base branch cannot be determined
 
 #### Dependencies:
 - Use `subprocess` module to execute git commands
@@ -215,7 +217,7 @@ class BranchInfo:
 
 6. **Actions** ⚠️ PARTIALLY COMPLETED
    - ✅ Bind `c` key to checkout action
-   - ⚠️ Bind `r` key to rebase action (needs fix)
+   - ✅ Bind `r` key to rebase action (FIXED - now uses upstream)
    - ✅ Bind `d` key to delete action
    - ✅ Bind `q` key to quit
    - ⏳ Show confirmation dialog for destructive actions (delete, rebase) - PENDING
@@ -361,10 +363,10 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 - [x] Progressively loads and indicates merged branches
 - [x] Supports navigation with arrow keys and j/k
 - [x] Can checkout branch with `c`
-- [ ] Can rebase with `r` - **IN PROGRESS: Fixing to use upstream branch**
+- [x] Can rebase with `r` - **COMPLETED: Now rebases selected branch to its upstream**
 - [x] Can delete branch with `d`
 - [x] Handles errors gracefully
-- [x] All tests pass (46 tests, 86.83% coverage)
+- [x] All tests pass (50 tests, 85.91% coverage)
 - [x] Type checking passes (strict mode)
 - [x] Works in real-world git repositories
 - [x] Smooth UX with loading indicators for async data
@@ -387,10 +389,13 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 ## Next Steps
 
 **Current Priority:**
-1. 🚧 Implement `get_base_branch()` to detect upstream/base branch
-2. 🚧 Fix `rebase_to_branch()` to rebase selected branch to its upstream
-3. ⏳ Add confirmation dialogs for destructive actions (rebase, delete)
-4. ⏳ Add color coding for track status indicators
-5. ⏳ Phase 4: CI/CD setup (GitHub Actions, PyPI distribution)
+1. ⏳ Add confirmation dialogs for destructive actions (rebase, delete)
+2. ⏳ Add color coding for track status indicators
+3. ⏳ Phase 4: CI/CD setup (GitHub Actions, PyPI distribution)
+
+**Recent Changes:**
+- ✅ Implemented `get_base_branch()` to detect upstream/base branch (commit b4162ee)
+- ✅ Fixed `rebase_to_branch()` to rebase selected branch to its upstream (commit b4162ee)
+- Tests: 50 passing, coverage 85.91%
 
 **Process Note:** This implementation plan is updated with each step to maintain accurate project status.
