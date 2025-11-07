@@ -321,7 +321,8 @@ def test_hop_app_action_delete_success(sample_branches: list[BranchInfo]) -> Non
     # Mock query_one to return a mock BranchList
     mock_branch_list = Mock()
     mock_branch_list.cursor_row = 1
-    mock_branch_list.remove_branch = Mock()
+    # Make remove_branch actually delete from the list
+    mock_branch_list.remove_branch = Mock(side_effect=lambda idx: branches.pop(idx))
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
     app.show_status = Mock()  # type: ignore[method-assign]
 

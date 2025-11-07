@@ -157,12 +157,14 @@ class BranchList(DataTable):  # type: ignore[misc]
         if row_index < 0 or row_index >= len(self.branches):
             return
 
-        # Remove from internal list
-        del self.branches[row_index]
+        # Get row key BEFORE modifying anything
+        row_key = self.get_row_at(row_index)[0]  # type: ignore[misc]
 
         # Remove row from table
-        row_key = self.get_row_at(row_index)[0]  # type: ignore[misc]
         self.remove_row(row_key)  # type: ignore[misc]
+
+        # Remove from internal list
+        del self.branches[row_index]
 
         # Adjust cursor if needed
         if self.cursor_row >= len(self.branches) and len(self.branches) > 0:
@@ -317,17 +319,16 @@ class HopApp(App[None]):
         try:
             delete_branch(branch_name)
 
-            # Remove from branches list and update UI
-            branch_list.remove_branch(cursor_row)
-
-            # Also remove from app's branches list
-            del self.branches[cursor_row]
-
-            # Also cancel any pending metadata workers for this branch
+            # Cancel any pending metadata workers for this branch BEFORE removing
             if cursor_row < len(self.metadata_workers):
                 worker = self.metadata_workers[cursor_row]
                 worker.cancel()  # type: ignore[misc]
                 del self.metadata_workers[cursor_row]
+
+            # Remove from branches list and update UI
+            # Note: This updates both branch_list.branches AND self.branches
+            # because they reference the same list object
+            branch_list.remove_branch(cursor_row)
 
             self.show_status(f"Deleted branch: {branch_name}")
             # Do NOT exit - stay in UI for more operations
