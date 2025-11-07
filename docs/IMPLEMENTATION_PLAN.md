@@ -432,6 +432,9 @@ Using `textual` for the TUI framework - provides async support, reactive updates
   - Semantic colors: green (=), yellow (<), cyan (>), red (<>)
   - Loading state and no upstream shown in dim white
   - Fixed AttributeError in remove_branch() - now using ordered_rows
-- Tests: 53 passing, coverage 71.46%
+- ✅ Fixed TypeError: unhashable type 'Row' in deletion (commit da5e87e)
+  - Root cause: ordered_rows contains Row objects, not RowKey directly
+  - Solution: Extract row.key from Row object before passing to remove_row()
+- Tests: 53 passing, coverage 71.29%
 
 **Process Note:** This implementation plan is updated with each step to maintain accurate project status.
