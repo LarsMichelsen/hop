@@ -414,6 +414,12 @@ Using `textual` for the TUI framework - provides async support, reactive updates
   - Pass index through confirmation flow
   - Verify branch name matches before deletion
   - Prevents deleting wrong branch if cursor moves
-- Tests: 52 passing, coverage 75.27%
+- ✅ Fixed status bar visibility (commit a0c7887)
+  - Render status bar after Footer (truly at bottom)
+  - Initialize with "Ready" text (shows presence)
+  - Use $boost background for visibility
+  - Add bold text styling
+  - Add comprehensive test for status messages
+- Tests: 53 passing, coverage 75.27%
 
 **Process Note:** This implementation plan is updated with each step to maintain accurate project status.
