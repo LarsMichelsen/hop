@@ -44,22 +44,28 @@ uv run python -m basedpyright
 
 Must pass with zero errors.
 
-### 4. Run Tests with pytest
+### 4. Run Tests with Coverage
 
-Run all tests:
+Run all tests (coverage is enabled by default):
 ```bash
 uv run python -m pytest
 ```
+
+**Coverage is automatically measured** and enforced:
+- Minimum coverage threshold is configured in `pyproject.toml`
+- Tests will fail if coverage drops below the threshold
+- Coverage report shows missing lines
 
 Run with verbose output:
 ```bash
 uv run python -m pytest -v
 ```
 
-Run with coverage:
+View detailed coverage report:
 ```bash
-uv run python -m pytest --cov=hop --cov-report=term-missing
+uv run python -m pytest --cov-report=html
 ```
+Then open `htmlcov/index.html` in a browser.
 
 ## Complete Pre-Commit Workflow
 
@@ -142,12 +148,43 @@ def calculate_track_status(local: str, remote: str) -> str:
     # ... rest of implementation
 ```
 
+## Maintaining Test Coverage
+
+**Important:** Code coverage must never decrease.
+
+### Coverage Requirements
+
+- Minimum coverage threshold: Set in `pyproject.toml` (`--cov-fail-under`)
+- Current baseline: Check by running `uv run python -m pytest`
+- Coverage includes branch coverage (both paths of if/else statements)
+
+### When Coverage Fails
+
+If you see:
+```
+ERROR: Coverage failure: total of X.XX is less than fail-under=Y.YY
+```
+
+**Action required:**
+1. Check the coverage report for lines marked "Missing"
+2. Write tests that exercise those code paths
+3. Run tests again to verify coverage is restored
+4. Only commit when all checks pass
+
+### Improving Coverage
+
+- Add tests for new features before implementing them (TDD)
+- Test edge cases and error conditions
+- Use `--cov-report=html` to see detailed line-by-line coverage
+- Aim to keep coverage at or above the current baseline
+
 ## Configuration
 
 All tool configurations are in `pyproject.toml`:
 - **ruff**: Line length 100, Python 3.14 target
 - **basedpyright**: Strict type checking mode
 - **pytest**: Test discovery in `tests/` directory
+- **coverage**: Minimum threshold, branch coverage enabled
 
 ## CI/CD
 

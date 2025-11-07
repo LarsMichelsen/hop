@@ -23,6 +23,25 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+addopts = "--cov=hop --cov-report=term-missing --cov-report=term:skip-covered --cov-fail-under=65"
+
+[tool.coverage.run]
+source = ["src/hop"]
+branch = true
+omit = []
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
 
 [tool.basedpyright]
 typeCheckingMode = "strict"
@@ -53,5 +72,6 @@ indent-style = "space"
 dev = [
     "basedpyright>=1.33.0",
     "pytest>=8.4.2",
+    "pytest-cov>=6.0.0",
     "ruff>=0.14.4",
 ]

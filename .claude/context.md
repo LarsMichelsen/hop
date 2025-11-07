@@ -27,13 +27,15 @@ uv run python -m basedpyright
 - MUST pass with ZERO errors
 - No exceptions - fix all type issues
 
-### 4. Run All Tests
+### 4. Run All Tests with Coverage
 ```bash
 uv run python -m pytest
 ```
-- Runs all unit tests
+- Runs all unit tests with coverage measurement
 - ALL tests MUST pass
+- Coverage MUST NOT decrease below the configured threshold
 - No failing tests allowed in commits
+- Coverage report shows uncovered lines
 
 ## One-Liner for All Checks
 
@@ -57,16 +59,43 @@ uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright &
 - DO NOT commit without running all checks
 - Fix all issues before committing
 
+## Coverage Verification
+
+**CRITICAL:** Test coverage must NEVER decrease:
+
+1. **Before making changes:** Note the current coverage percentage
+2. **After making changes:** Run pytest to check new coverage
+3. **If coverage decreased:**
+   - STOP immediately - do not commit
+   - Review the coverage report (shows missing lines)
+   - Add tests for uncovered code paths
+   - Re-run all checks
+   - Only commit when coverage is >= baseline
+4. **Automatic iteration:** If coverage fails, automatically write tests to restore/improve coverage
+
+**Coverage failure example:**
+```
+ERROR: Coverage failure: total of 60.00 is less than fail-under=65.00
+```
+
+**What to do:**
+1. Check the coverage report for "Missing" lines
+2. Write tests that exercise those code paths
+3. Re-run: `uv run python -m pytest`
+4. Verify coverage is back to baseline or higher
+5. Then commit
+
 ## Automatic Git Commits
 
 **MANDATORY:** After each significant change where all checks pass, you MUST create a git commit automatically:
 
-1. **Run all pre-commit checks** (format, lint, type check, tests)
+1. **Run all pre-commit checks** (format, lint, type check, tests with coverage)
 2. **STOP IMMEDIATELY if ANY check fails** - do not proceed to commit
-3. **Fix the failure** and re-run all checks from the beginning
-4. **Only when ALL checks pass**, immediately create a commit
-5. **No user confirmation needed** - commit automatically when checks pass
-6. **Commit message format:**
+3. **If coverage decreased:** Automatically add tests to restore coverage
+4. **Fix the failure** and re-run all checks from the beginning
+5. **Only when ALL checks pass** (including coverage), immediately create a commit
+6. **No user confirmation needed** - commit automatically when checks pass
+7. **Commit message format:**
    - Clear, concise description of changes
 
 **What counts as "significant change":**
