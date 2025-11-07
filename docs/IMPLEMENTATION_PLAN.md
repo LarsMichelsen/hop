@@ -425,6 +425,10 @@ Using `textual` for the TUI framework - provides async support, reactive updates
   - Updated confirmation dialog to show merge status warnings
   - Show ⚠️ WARNING for unmerged branches with explanation
   - Context-aware messages based on merge status and track status
+- ✅ Fixed RowDoesNotExist error for branches with same creation date (commit 762f01e)
+  - Root cause: Using row[0] (date column) instead of unique RowKey
+  - Solution: Use row.key attribute for proper row identification
+  - Prevents error when multiple branches created on same date
 - Tests: 53 passing, coverage 72.26%
 
 **Process Note:** This implementation plan is updated with each step to maintain accurate project status.
