@@ -570,6 +570,8 @@ def test_hop_app_refresh_branches(sample_branches: list[BranchInfo]) -> None:
     # Mock query_one to return a mock BranchList
     mock_old_branch_list = Mock()
     mock_old_branch_list.remove = Mock()
+    mock_old_branch_list.cursor_row = 1  # Mock cursor at row 1
+    mock_old_branch_list.focus = Mock()
 
     app.query_one = Mock(return_value=mock_old_branch_list)  # type: ignore[method-assign]
     app.mount = Mock()  # type: ignore[method-assign]
@@ -580,7 +582,14 @@ def test_hop_app_refresh_branches(sample_branches: list[BranchInfo]) -> None:
     mock_worker = Mock()
     app.metadata_workers = [mock_worker]
 
-    with patch("hop.git.get_branches_fast", return_value=updated_branches):
+    # Mock the new BranchList that will be created
+    mock_new_branch_list = Mock()
+    mock_new_branch_list.focus = Mock()
+
+    with (
+        patch("hop.git.get_branches_fast", return_value=updated_branches),
+        patch("hop.ui.BranchList", return_value=mock_new_branch_list),
+    ):
         app.refresh_branches()
 
         # Should cancel existing workers
@@ -589,6 +598,8 @@ def test_hop_app_refresh_branches(sample_branches: list[BranchInfo]) -> None:
         mock_old_branch_list.remove.assert_called_once()
         # Should mount new branch list
         app.mount.assert_called_once()
+        # Should restore focus to new branch list
+        mock_new_branch_list.focus.assert_called_once()
         # Should start loading metadata
         app.load_metadata.assert_called_once()
         # Should have updated branches

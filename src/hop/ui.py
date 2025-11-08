@@ -603,8 +603,9 @@ class HopApp(App[None]):
                 worker.cancel()  # type: ignore[misc]
             self.metadata_workers.clear()
 
-            # Get the current branch list widget and clear it
+            # Get the current branch list widget and save cursor position
             old_branch_list = self.query_one(BranchList)
+            old_cursor_row = old_branch_list.cursor_row
 
             # Remove old branch list
             old_branch_list.remove()
@@ -612,6 +613,15 @@ class HopApp(App[None]):
             # Create and mount new branch list
             new_branch_list = BranchList(new_branches)
             self.mount(new_branch_list, before=1)  # Mount before Footer
+
+            # Restore cursor position (ensure it's within bounds)
+            if 0 <= old_cursor_row < len(new_branches):
+                new_branch_list.cursor_row = old_cursor_row  # type: ignore[misc]
+            elif len(new_branches) > 0:
+                new_branch_list.cursor_row = 0  # type: ignore[misc]
+
+            # Restore focus to the branch list
+            new_branch_list.focus()
 
             # Start loading metadata for new branches
             self.load_metadata()
