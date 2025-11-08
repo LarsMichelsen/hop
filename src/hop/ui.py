@@ -616,9 +616,9 @@ class HopApp(App[None]):
 
             # Restore cursor position (ensure it's within bounds)
             if 0 <= old_cursor_row < len(new_branches):
-                new_branch_list.cursor_row = old_cursor_row  # type: ignore[misc]
+                new_branch_list.move_cursor(row=old_cursor_row)  # type: ignore[misc]
             elif len(new_branches) > 0:
-                new_branch_list.cursor_row = 0  # type: ignore[misc]
+                new_branch_list.move_cursor(row=0)  # type: ignore[misc]
 
             # Restore focus to the branch list
             new_branch_list.focus()
