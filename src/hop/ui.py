@@ -463,7 +463,8 @@ class HopApp(App[None]):
             checkout_branch(branch.name)
             self.show_status(f"Checked out branch: {branch.name}")
             # Refresh the branch list to show the updated current branch
-            self.refresh_branches()
+            # Pass the branch name to restore focus after refresh
+            self.refresh_branches(focus_branch_name=branch.name)
         except RuntimeError as e:
             self.show_status(f"Error: {e}")
 
@@ -479,7 +480,8 @@ class HopApp(App[None]):
             rebase_to_branch(branch.name)
             self.show_status(f"Rebased to branch: {branch.name}")
             # Refresh the branch list to show the updated state
-            self.refresh_branches()
+            # Pass the branch name to restore focus after refresh
+            self.refresh_branches(focus_branch_name=branch.name)
         except RuntimeError as e:
             self.show_status(f"Error: {e}")
 
@@ -593,8 +595,14 @@ class HopApp(App[None]):
         except RuntimeError as e:
             self.show_status(f"Error: {e}")
 
-    def refresh_branches(self) -> None:
-        """Refresh the branch list after creating a new branch."""
+    def refresh_branches(self, focus_branch_name: str | None = None) -> None:
+        """Refresh the branch list after creating a new branch.
+
+        Args:
+            focus_branch_name: Optional branch name to focus after refresh.
+                If provided, cursor will move to this branch in the new list.
+                If None, cursor position (row index) will be preserved.
+        """
         from hop.git import get_branches_fast
 
         try:
@@ -620,11 +628,23 @@ class HopApp(App[None]):
             new_branch_list = BranchList(new_branches)
             self.mount(new_branch_list, before=1)  # Mount before Footer
 
-            # Restore cursor position (ensure it's within bounds)
-            if 0 <= old_cursor_row < len(new_branches):
-                new_branch_list.move_cursor(row=old_cursor_row)  # type: ignore[misc]
-            elif len(new_branches) > 0:
-                new_branch_list.move_cursor(row=0)  # type: ignore[misc]
+            # Restore cursor position
+            if focus_branch_name is not None:
+                # Find the branch by name in the new list
+                for idx, branch in enumerate(new_branches):
+                    if branch.name == focus_branch_name:
+                        new_branch_list.move_cursor(row=idx)  # type: ignore[misc]
+                        break
+                else:
+                    # Branch not found (shouldn't happen), fall back to first row
+                    if len(new_branches) > 0:
+                        new_branch_list.move_cursor(row=0)  # type: ignore[misc]
+            else:
+                # Restore cursor position by row index (ensure it's within bounds)
+                if 0 <= old_cursor_row < len(new_branches):
+                    new_branch_list.move_cursor(row=old_cursor_row)  # type: ignore[misc]
+                elif len(new_branches) > 0:
+                    new_branch_list.move_cursor(row=0)  # type: ignore[misc]
 
             # Restore focus to the branch list
             new_branch_list.focus()
