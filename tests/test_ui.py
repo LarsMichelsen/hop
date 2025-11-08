@@ -63,7 +63,9 @@ def test_branch_list_add_branch_row(sample_branches: list[BranchInfo]) -> None:
         # Status is now a Text object
         assert isinstance(call_args[1], Text)
         assert call_args[1].plain == "--"  # status (loading)
-        assert call_args[2] == "* main"  # branch name with current marker
+        # Branch name is now a Text object for current branch
+        assert isinstance(call_args[2], Text)
+        assert call_args[2].plain == "* main"  # branch name with current marker
         assert call_args[3] == "Initial commit"  # commit message
 
 

@@ -312,10 +312,14 @@ class BranchList(DataTable):  # type: ignore[misc]
         # Track status with color
         status = self._format_status(branch)
 
-        # Branch name - highlight current branch
-        branch_name = branch.name
+        # Branch name - highlight current branch with colored marker
         if branch.name == self.current_branch:
-            branch_name = f"* {branch_name}"
+            branch_name = Text.assemble(
+                ("* ", "bold green"),
+                branch.name,
+            )
+        else:
+            branch_name = branch.name
 
         # Add row
         self.add_row(date_str, status, branch_name, branch.last_commit_message)  # type: ignore[misc]
@@ -330,9 +334,15 @@ class BranchList(DataTable):  # type: ignore[misc]
         # Update the row
         date_str = branch.creator_date.strftime("%Y-%m-%d")
         status = self._format_status(branch)
-        branch_name = branch.name
+
+        # Branch name - highlight current branch with colored marker
         if branch.name == self.current_branch:
-            branch_name = f"* {branch_name}"
+            branch_name = Text.assemble(
+                ("* ", "bold green"),
+                branch.name,
+            )
+        else:
+            branch_name = branch.name
 
         # Update cells
         self.update_cell_at((row_index, 0), date_str)  # type: ignore[arg-type,misc]
