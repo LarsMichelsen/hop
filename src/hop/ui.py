@@ -4,7 +4,7 @@ import contextlib
 from typing import ClassVar
 
 from rich.text import Text
-from textual import work
+from textual import events, work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import ModalScreen
@@ -363,6 +363,11 @@ class BranchList(DataTable):  # type: ignore[misc]
         # Adjust cursor if needed
         if self.cursor_row >= len(self.branches) and len(self.branches) > 0:
             self.cursor_row = len(self.branches) - 1  # type: ignore[misc]
+
+    async def _on_click(self, event: events.Click) -> None:
+        """Disable mouse click navigation."""
+        event.prevent_default()
+        event.stop()
 
 
 class HopApp(App[None]):
