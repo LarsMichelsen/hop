@@ -456,8 +456,8 @@ class HopApp(App[None]):
         try:
             checkout_branch(branch.name)
             self.show_status(f"Checked out branch: {branch.name}")
-            # Exit after successful checkout
-            self.exit()
+            # Refresh the branch list to show the updated current branch
+            self.refresh_branches()
         except RuntimeError as e:
             self.show_status(f"Error: {e}")
 
@@ -472,8 +472,8 @@ class HopApp(App[None]):
         try:
             rebase_to_branch(branch.name)
             self.show_status(f"Rebased to branch: {branch.name}")
-            # Exit after successful rebase
-            self.exit()
+            # Refresh the branch list to show the updated state
+            self.refresh_branches()
         except RuntimeError as e:
             self.show_status(f"Error: {e}")
 
@@ -583,11 +583,11 @@ class HopApp(App[None]):
             create_branch(source_branch.name, branch_name)
             self.show_status(f"Created branch: {branch_name}")
             # Refresh the branch list to show the new branch
-            self._refresh_branches()
+            self.refresh_branches()
         except RuntimeError as e:
             self.show_status(f"Error: {e}")
 
-    def _refresh_branches(self) -> None:
+    def refresh_branches(self) -> None:
         """Refresh the branch list after creating a new branch."""
         from hop.git import get_branches_fast
 

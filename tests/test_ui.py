@@ -235,13 +235,13 @@ def test_hop_app_action_checkout_success(sample_branches: list[BranchInfo]) -> N
     mock_branch_list = Mock()
     mock_branch_list.cursor_row = 0
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.exit = Mock()  # type: ignore[method-assign]
+    app.refresh_branches = Mock()  # type: ignore[method-assign]
 
     with patch("hop.ui.checkout_branch"):
         app.action_checkout()
 
-        # Should exit after successful checkout
-        app.exit.assert_called_once()
+        # Should refresh branches after successful checkout
+        app.refresh_branches.assert_called_once()
 
 
 def test_hop_app_action_checkout_error(sample_branches: list[BranchInfo]) -> None:
@@ -253,15 +253,15 @@ def test_hop_app_action_checkout_error(sample_branches: list[BranchInfo]) -> Non
     mock_branch_list.cursor_row = 0
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
     app.show_status = Mock()  # type: ignore[method-assign]
-    app.exit = Mock()  # type: ignore[method-assign]
+    app.refresh_branches = Mock()  # type: ignore[method-assign]
 
     with patch("hop.ui.checkout_branch", side_effect=RuntimeError("Checkout failed")):
         app.action_checkout()
 
         # Should show error status
         app.show_status.assert_called_once_with("Error: Checkout failed")
-        # Should not exit
-        app.exit.assert_not_called()
+        # Should not refresh branches
+        app.refresh_branches.assert_not_called()
 
 
 def test_hop_app_action_checkout_invalid_cursor(sample_branches: list[BranchInfo]) -> None:
@@ -304,13 +304,13 @@ def test_hop_app_action_rebase_success(sample_branches: list[BranchInfo]) -> Non
     mock_branch_list = Mock()
     mock_branch_list.cursor_row = 1
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.exit = Mock()  # type: ignore[method-assign]
+    app.refresh_branches = Mock()  # type: ignore[method-assign]
 
     with patch("hop.ui.rebase_to_branch"):
         app.action_rebase()
 
-        # Should exit after successful rebase
-        app.exit.assert_called_once()
+        # Should refresh branches after successful rebase
+        app.refresh_branches.assert_called_once()
 
 
 def test_hop_app_action_rebase_error(sample_branches: list[BranchInfo]) -> None:
@@ -322,15 +322,15 @@ def test_hop_app_action_rebase_error(sample_branches: list[BranchInfo]) -> None:
     mock_branch_list.cursor_row = 1
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
     app.show_status = Mock()  # type: ignore[method-assign]
-    app.exit = Mock()  # type: ignore[method-assign]
+    app.refresh_branches = Mock()  # type: ignore[method-assign]
 
     with patch("hop.ui.rebase_to_branch", side_effect=RuntimeError("Rebase failed")):
         app.action_rebase()
 
         # Should show error status
         app.show_status.assert_called_once_with("Error: Rebase failed")
-        # Should not exit
-        app.exit.assert_not_called()
+        # Should not refresh branches
+        app.refresh_branches.assert_not_called()
 
 
 def test_hop_app_action_rebase_invalid_cursor(sample_branches: list[BranchInfo]) -> None:
@@ -506,14 +506,14 @@ def test_hop_app_handle_new_branch_input_success(sample_branches: list[BranchInf
     mock_branch_list.cursor_row = 0
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
     app.show_status = Mock()  # type: ignore[method-assign]
-    app._refresh_branches = Mock()  # type: ignore[method-assign]
+    app.refresh_branches = Mock()  # type: ignore[method-assign]
 
     with patch("hop.ui.create_branch"):
         app._handle_new_branch_input("new-feature")  # type: ignore[reportPrivateUsage]
 
         # Should show status and refresh branches after successful creation
         app.show_status.assert_called_once()
-        app._refresh_branches.assert_called_once()  # type: ignore[reportPrivateUsage]
+        app.refresh_branches.assert_called_once()
 
 
 def test_hop_app_handle_new_branch_input_cancelled(sample_branches: list[BranchInfo]) -> None:
@@ -544,7 +544,7 @@ def test_hop_app_handle_new_branch_input_error(sample_branches: list[BranchInfo]
     mock_branch_list.cursor_row = 0
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
     app.show_status = Mock()  # type: ignore[method-assign]
-    app._refresh_branches = Mock()  # type: ignore[method-assign]
+    app.refresh_branches = Mock()  # type: ignore[method-assign]
 
     with patch("hop.ui.create_branch", side_effect=RuntimeError("Branch already exists")):
         app._handle_new_branch_input("existing-branch")  # type: ignore[reportPrivateUsage]
@@ -552,7 +552,7 @@ def test_hop_app_handle_new_branch_input_error(sample_branches: list[BranchInfo]
         # Should show error status
         app.show_status.assert_called_once_with("Error: Branch already exists")
         # Should not refresh branches
-        app._refresh_branches.assert_not_called()  # type: ignore[reportPrivateUsage]
+        app.refresh_branches.assert_not_called()
 
 
 def test_hop_app_refresh_branches(sample_branches: list[BranchInfo]) -> None:
@@ -581,7 +581,7 @@ def test_hop_app_refresh_branches(sample_branches: list[BranchInfo]) -> None:
     app.metadata_workers = [mock_worker]
 
     with patch("hop.git.get_branches_fast", return_value=updated_branches):
-        app._refresh_branches()  # type: ignore[reportPrivateUsage]
+        app.refresh_branches()
 
         # Should cancel existing workers
         mock_worker.cancel.assert_called_once()
