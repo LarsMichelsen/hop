@@ -391,7 +391,34 @@ Using `textual` for the TUI framework - provides async support, reactive updates
 ## Next Steps
 
 **Current Priority:**
-1. ⏳ Phase 4: CI/CD setup (GitHub Actions, PyPI distribution)
+1. 🚧 Add "Create New Branch" feature (press 'n' to create branch from selected branch)
+2. ⏳ Phase 4: CI/CD setup (GitHub Actions, PyPI distribution)
+
+**New Feature: Create Branch from Selected Branch (n key)**
+
+Implementation Steps:
+1. Add `create_branch(source_branch: str, new_branch_name: str)` to `hop.git`
+   - Validates branch name (no spaces, special chars, etc.)
+   - Creates new branch from source using: `git branch <new> <source>`
+   - Checks out the new branch: `git checkout <new>`
+   - Returns success/error message
+
+2. Add `BranchNameInputScreen` modal dialog to `hop.ui`
+   - Text input field for branch name
+   - OK/Cancel buttons
+   - Validates input (non-empty, valid git branch name)
+   - Returns entered branch name or None if cancelled
+
+3. Add `action_create_branch()` to `HopApp`
+   - Gets currently selected branch as source
+   - Pushes `BranchNameInputScreen` modal
+   - On confirmation, calls `create_branch()` with source and new name
+   - Shows success message and exits (since we checked out new branch)
+   - Shows error message if creation fails
+
+4. Add keybinding 'n' to `HopApp.BINDINGS`
+
+5. Update help screen with new keybinding
 
 **Recent Changes:**
 - ✅ Implemented `get_base_branch()` to detect upstream/base branch (commit b4162ee)

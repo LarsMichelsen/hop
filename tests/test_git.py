@@ -8,6 +8,7 @@ import pytest
 from hop.git import (
     BranchInfo,
     checkout_branch,
+    create_branch,
     delete_branch,
     fetch_branch_metadata,
     get_base_branch,
@@ -366,3 +367,37 @@ def test_delete_current_branch() -> None:
     with patch("hop.git.get_current_branch", return_value="main"):
         with pytest.raises(RuntimeError, match="Cannot delete the currently checked out branch"):
             delete_branch("main")
+
+
+def test_create_branch_success() -> None:
+    """Test successful branch creation without checkout."""
+    # Mock successful branch creation
+    mock_create = Mock()
+    mock_create.returncode = 0
+
+    with patch("subprocess.run", return_value=mock_create):
+        # Should not raise an exception
+        create_branch("main", "new-feature")
+
+
+def test_create_branch_empty_name() -> None:
+    """Test that we handle empty branch names."""
+    with pytest.raises(RuntimeError, match="Branch name cannot be empty"):
+        create_branch("main", "")
+
+
+def test_create_branch_whitespace_name() -> None:
+    """Test that we handle whitespace-only branch names."""
+    with pytest.raises(RuntimeError, match="Branch name cannot be empty"):
+        create_branch("main", "   ")
+
+
+def test_create_branch_creation_error() -> None:
+    """Test that we handle errors when creating a branch."""
+    mock_result = Mock()
+    mock_result.returncode = 1
+    mock_result.stderr = "fatal: branch already exists"
+
+    with patch("subprocess.run", return_value=mock_result):
+        with pytest.raises(RuntimeError, match="Failed to create branch"):
+            create_branch("main", "existing-branch")

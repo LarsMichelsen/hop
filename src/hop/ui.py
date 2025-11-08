@@ -8,12 +8,13 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Footer, Label, Static
+from textual.widgets import Button, DataTable, Footer, Input, Label, Static
 from textual.worker import Worker
 
 from hop.git import (
     BranchInfo,
     checkout_branch,
+    create_branch,
     delete_branch,
     fetch_branch_metadata,
     get_current_branch,
@@ -72,6 +73,7 @@ Actions:
   c          Checkout selected branch
   r          Rebase current branch to selected branch's upstream
   d          Delete selected branch (with confirmation)
+  n          Create new branch from selected branch
   h          Show this help screen
   q          Quit application
 
@@ -170,6 +172,82 @@ class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
             self.dismiss(True)
         else:
             self.dismiss(False)
+
+
+class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
+    """Modal screen for entering a new branch name."""
+
+    CSS = """
+    BranchNameInputScreen {
+        align: center middle;
+    }
+
+    #input-dialog {
+        width: 60;
+        height: 13;
+        border: thick $background 80%;
+        background: $surface;
+        padding: 1 2;
+    }
+
+    #input-title {
+        width: 100%;
+        content-align: center middle;
+        margin-bottom: 1;
+        text-style: bold;
+    }
+
+    #input-field {
+        width: 100%;
+        margin-bottom: 1;
+    }
+
+    #input-button-container {
+        width: 100%;
+        height: auto;
+        align: center middle;
+    }
+
+    Button {
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, source_branch: str) -> None:
+        super().__init__()
+        self.source_branch = source_branch
+
+    def compose(self) -> ComposeResult:
+        """Compose the input dialog."""
+        with Container(id="input-dialog"):
+            yield Label(f"Create new branch from '{self.source_branch}'", id="input-title")
+            yield Input(placeholder="Enter branch name...", id="input-field")
+            with Horizontal(id="input-button-container"):
+                yield Button("Create", variant="primary", id="create")
+                yield Button("Cancel", id="cancel")
+
+    def on_mount(self) -> None:
+        """Focus the input field when mounted."""
+        self.query_one(Input).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        if event.button.id == "create":
+            input_field = self.query_one(Input)
+            branch_name = input_field.value.strip()
+            if branch_name:
+                self.dismiss(branch_name)
+            else:
+                # Don't dismiss if empty - show feedback
+                input_field.focus()
+        else:
+            self.dismiss(None)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle Enter key in input field."""
+        branch_name = event.value.strip()
+        if branch_name:
+            self.dismiss(branch_name)
 
 
 class BranchList(DataTable):  # type: ignore[misc]
@@ -309,6 +387,7 @@ class HopApp(App[None]):
         ("c", "checkout", "Checkout"),
         ("r", "rebase", "Rebase"),
         ("d", "delete", "Delete"),
+        ("n", "new_branch", "New Branch"),
         ("h", "help", "Help"),
         ("q", "quit", "Quit"),
         ("j", "cursor_down", "Down"),
@@ -466,6 +545,79 @@ class HopApp(App[None]):
             # Do NOT exit - stay in UI for more operations
         except RuntimeError as e:
             self.show_status(f"Error: {e}")
+
+    def action_new_branch(self) -> None:
+        """Create a new branch from the selected branch."""
+        branch_list = self.query_one(BranchList)
+        cursor_row = branch_list.cursor_row
+        if cursor_row < 0 or cursor_row >= len(self.branches):
+            return
+
+        source_branch = self.branches[cursor_row]
+
+        # Show input dialog for branch name
+        self.push_screen(
+            BranchNameInputScreen(source_branch.name),
+            self._handle_new_branch_input,
+        )
+
+    def _handle_new_branch_input(self, branch_name: str | None) -> None:
+        """Handle the result of branch name input.
+
+        Args:
+            branch_name: Name entered by user, or None if cancelled
+        """
+        if branch_name is None:
+            return
+
+        # Get the currently selected branch as source
+        branch_list = self.query_one(BranchList)
+        cursor_row = branch_list.cursor_row
+        if cursor_row < 0 or cursor_row >= len(self.branches):
+            self.show_status("Error: Invalid branch selection")
+            return
+
+        source_branch = self.branches[cursor_row]
+
+        try:
+            create_branch(source_branch.name, branch_name)
+            self.show_status(f"Created branch: {branch_name}")
+            # Refresh the branch list to show the new branch
+            self._refresh_branches()
+        except RuntimeError as e:
+            self.show_status(f"Error: {e}")
+
+    def _refresh_branches(self) -> None:
+        """Refresh the branch list after creating a new branch."""
+        from hop.git import get_branches_fast
+
+        try:
+            # Get updated branch list
+            new_branches = get_branches_fast()
+
+            # Update app's branch list
+            self.branches = new_branches
+
+            # Cancel all existing metadata workers
+            for worker in self.metadata_workers:
+                worker.cancel()  # type: ignore[misc]
+            self.metadata_workers.clear()
+
+            # Get the current branch list widget and clear it
+            old_branch_list = self.query_one(BranchList)
+
+            # Remove old branch list
+            old_branch_list.remove()
+
+            # Create and mount new branch list
+            new_branch_list = BranchList(new_branches)
+            self.mount(new_branch_list, before=1)  # Mount before Footer
+
+            # Start loading metadata for new branches
+            self.load_metadata()
+
+        except RuntimeError as e:
+            self.show_status(f"Error refreshing branches: {e}")
 
     def show_status(self, message: str) -> None:
         """Show a status message."""

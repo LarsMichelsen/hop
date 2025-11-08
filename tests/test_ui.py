@@ -462,6 +462,139 @@ def test_hop_app_action_delete_invalid_cursor(sample_branches: list[BranchInfo])
         app.push_screen.assert_not_called()
 
 
+def test_hop_app_action_new_branch_success(sample_branches: list[BranchInfo]) -> None:
+    """Test successful new branch creation action."""
+    app = HopApp(sample_branches)
+
+    # Mock query_one to return a mock BranchList
+    mock_branch_list = Mock()
+    mock_branch_list.cursor_row = 0
+    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    app.push_screen = Mock()  # type: ignore[method-assign]
+
+    app.action_new_branch()
+
+    # Should show input dialog
+    app.push_screen.assert_called_once()
+    # Verify it's calling BranchNameInputScreen with correct source branch
+    args, _ = app.push_screen.call_args
+    assert args[0].source_branch == sample_branches[0].name
+
+
+def test_hop_app_action_new_branch_invalid_cursor(sample_branches: list[BranchInfo]) -> None:
+    """Test new branch action with invalid cursor position."""
+    app = HopApp(sample_branches)
+
+    # Mock query_one to return a mock BranchList with invalid cursor
+    mock_branch_list = Mock()
+    mock_branch_list.cursor_row = -1
+    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    app.push_screen = Mock()  # type: ignore[method-assign]
+
+    app.action_new_branch()
+
+    # Should not show input dialog
+    app.push_screen.assert_not_called()
+
+
+def test_hop_app_handle_new_branch_input_success(sample_branches: list[BranchInfo]) -> None:
+    """Test handling successful branch name input."""
+    app = HopApp(sample_branches)
+
+    # Mock query_one to return a mock BranchList
+    mock_branch_list = Mock()
+    mock_branch_list.cursor_row = 0
+    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    app.show_status = Mock()  # type: ignore[method-assign]
+    app._refresh_branches = Mock()  # type: ignore[method-assign]
+
+    with patch("hop.ui.create_branch"):
+        app._handle_new_branch_input("new-feature")  # type: ignore[reportPrivateUsage]
+
+        # Should show status and refresh branches after successful creation
+        app.show_status.assert_called_once()
+        app._refresh_branches.assert_called_once()  # type: ignore[reportPrivateUsage]
+
+
+def test_hop_app_handle_new_branch_input_cancelled(sample_branches: list[BranchInfo]) -> None:
+    """Test handling cancelled branch name input."""
+    app = HopApp(sample_branches)
+
+    # Mock query_one to return a mock BranchList
+    mock_branch_list = Mock()
+    mock_branch_list.cursor_row = 0
+    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    app.show_status = Mock()  # type: ignore[method-assign]
+
+    with patch("hop.ui.create_branch") as mock_create:
+        app._handle_new_branch_input(None)  # type: ignore[reportPrivateUsage]
+
+        # Should not create branch
+        mock_create.assert_not_called()
+        # Should not show status
+        app.show_status.assert_not_called()
+
+
+def test_hop_app_handle_new_branch_input_error(sample_branches: list[BranchInfo]) -> None:
+    """Test handling error during branch creation."""
+    app = HopApp(sample_branches)
+
+    # Mock query_one to return a mock BranchList
+    mock_branch_list = Mock()
+    mock_branch_list.cursor_row = 0
+    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    app.show_status = Mock()  # type: ignore[method-assign]
+    app._refresh_branches = Mock()  # type: ignore[method-assign]
+
+    with patch("hop.ui.create_branch", side_effect=RuntimeError("Branch already exists")):
+        app._handle_new_branch_input("existing-branch")  # type: ignore[reportPrivateUsage]
+
+        # Should show error status
+        app.show_status.assert_called_once_with("Error: Branch already exists")
+        # Should not refresh branches
+        app._refresh_branches.assert_not_called()  # type: ignore[reportPrivateUsage]
+
+
+def test_hop_app_refresh_branches(sample_branches: list[BranchInfo]) -> None:
+    """Test refreshing the branch list."""
+    app = HopApp(sample_branches)
+
+    # Create a new branch to be returned by get_branches_fast
+    new_branch = BranchInfo(
+        name="new-feature",
+        creator_date=sample_branches[0].creator_date,
+        last_commit_message="New feature",
+    )
+    updated_branches = sample_branches + [new_branch]
+
+    # Mock query_one to return a mock BranchList
+    mock_old_branch_list = Mock()
+    mock_old_branch_list.remove = Mock()
+
+    app.query_one = Mock(return_value=mock_old_branch_list)  # type: ignore[method-assign]
+    app.mount = Mock()  # type: ignore[method-assign]
+    app.load_metadata = Mock()  # type: ignore[method-assign]
+    app.show_status = Mock()  # type: ignore[method-assign]
+
+    # Add a mock worker to be cancelled
+    mock_worker = Mock()
+    app.metadata_workers = [mock_worker]
+
+    with patch("hop.git.get_branches_fast", return_value=updated_branches):
+        app._refresh_branches()  # type: ignore[reportPrivateUsage]
+
+        # Should cancel existing workers
+        mock_worker.cancel.assert_called_once()
+        # Should remove old branch list
+        mock_old_branch_list.remove.assert_called_once()
+        # Should mount new branch list
+        app.mount.assert_called_once()
+        # Should start loading metadata
+        app.load_metadata.assert_called_once()
+        # Should have updated branches
+        assert len(app.branches) == 3
+
+
 def test_run_interactive_ui(sample_branches: list[BranchInfo]) -> None:
     """Test running the interactive UI."""
     with patch("hop.ui.HopApp") as mock_app_class:

@@ -322,3 +322,31 @@ def delete_branch(branch_name: str) -> None:
 
     if result.returncode != 0:
         raise RuntimeError(f"Failed to delete branch: {result.stderr}")
+
+
+def create_branch(source_branch: str, new_branch_name: str) -> None:
+    """Create a new branch from the source branch without checking it out.
+
+    Args:
+        source_branch: Name of the branch to use as the starting point
+        new_branch_name: Name for the new branch
+
+    Raises:
+        RuntimeError: If branch creation fails
+    """
+    # Validate branch name (basic validation - let git handle detailed validation)
+    if not new_branch_name or not new_branch_name.strip():
+        raise RuntimeError("Branch name cannot be empty")
+
+    new_branch_name = new_branch_name.strip()
+
+    # Create the new branch from the source branch
+    result = subprocess.run(
+        ["git", "branch", new_branch_name, source_branch],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to create branch: {result.stderr.strip()}")
