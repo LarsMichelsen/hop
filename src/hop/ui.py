@@ -395,6 +395,7 @@ class HopApp(App[None]):
         ("n", "new_branch", "New Branch"),
         ("h", "help", "Help"),
         ("q", "quit", "Quit"),
+        ("ctrl+c", "quit", "Quit"),
         ("j", "cursor_down", "Down"),
         ("k", "cursor_up", "Up"),
     ]
