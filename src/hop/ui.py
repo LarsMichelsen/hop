@@ -6,7 +6,7 @@ from typing import ClassVar
 from rich.text import Text
 from textual import events, work
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Label, Static
 from textual.worker import Worker
@@ -398,10 +398,12 @@ class HopApp(App[None]):
 
     #footer-container {
         dock: bottom;
-        height: auto;
+        height: 1;
+        background: $boost;
     }
 
     #status {
+        width: 1fr;
         height: 1;
         background: $boost;
         color: $text;
@@ -410,11 +412,11 @@ class HopApp(App[None]):
     }
 
     #controls {
+        width: auto;
         height: 1;
-        background: $primary;
+        background: $boost;
         color: $text;
         padding: 0 1;
-        text-style: bold;
     }
     """
 
@@ -438,12 +440,12 @@ class HopApp(App[None]):
     def compose(self) -> ComposeResult:
         """Compose the UI."""
         yield BranchList(self.branches)
-        with Vertical(id="footer-container"):
+        with Horizontal(id="footer-container"):
             yield Static("Ready", id="status")
             yield Static(
-                "[bold white on blue]c[/]heckout  [bold white on blue]r[/]ebase  "
-                "[bold white on blue]n[/]ew  [bold white on blue]d[/]elete  "
-                "[bold white on blue]q[/]uit",
+                "[[underline cyan]c[/]]heckout  [[underline cyan]r[/]]ebase  "
+                "[[underline cyan]n[/]]ew  [[underline cyan]d[/]]elete  "
+                "[[underline cyan]q[/]]uit",
                 id="controls",
             )
 
