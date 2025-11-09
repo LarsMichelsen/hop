@@ -8,7 +8,7 @@ from textual import events, work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Footer, Input, Label, Static
+from textual.widgets import Button, DataTable, Input, Label, Static
 from textual.worker import Worker
 
 from hop.config import get_prefix_for_branch, load_config
@@ -404,6 +404,14 @@ class HopApp(App[None]):
         padding: 0 1;
         text-style: bold;
     }
+
+    #controls {
+        dock: bottom;
+        height: 1;
+        background: $panel;
+        color: $text;
+        padding: 0 1;
+    }
     """
 
     BINDINGS: ClassVar = [
@@ -426,7 +434,21 @@ class HopApp(App[None]):
     def compose(self) -> ComposeResult:
         """Compose the UI."""
         yield BranchList(self.branches)
-        yield Footer()
+
+        # Controls bar with highlighted shortcut keys
+        controls_text = Text.assemble(
+            ("c", "bold cyan"),
+            "heckout, ",
+            ("r", "bold cyan"),
+            "ebase, ",
+            ("n", "bold cyan"),
+            "ew, ",
+            ("d", "bold cyan"),
+            "elete, ",
+            ("q", "bold cyan"),
+            "uit",
+        )
+        yield Static(controls_text, id="controls")
         yield Static("Ready", id="status")
 
     def on_mount(self) -> None:

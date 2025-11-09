@@ -980,7 +980,7 @@ def test_hop_app_compose(sample_branches: list[BranchInfo]) -> None:
     app = HopApp(sample_branches)
     # Just verify compose returns widgets without errors
     widgets = list(app.compose())
-    assert len(widgets) == 3  # BranchList, Footer, Static
+    assert len(widgets) == 3  # BranchList, Static (controls), Static (status)
 
 
 def test_hop_app_show_status_update(sample_branches: list[BranchInfo]) -> None:
