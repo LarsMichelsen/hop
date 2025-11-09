@@ -609,9 +609,10 @@ class HopApp(App[None]):
 
         try:
             create_branch(source_branch.name, branch_name)
-            self.show_status(f"Created branch: {branch_name}")
-            # Refresh the branch list to show the new branch
-            self.refresh_branches()
+            checkout_branch(branch_name)
+            self.show_status(f"Created and checked out branch: {branch_name}")
+            # Refresh the branch list and move cursor to the new branch
+            self.refresh_branches(focus_branch_name=branch_name)
         except RuntimeError as e:
             self.show_status(f"Error: {e}")
 

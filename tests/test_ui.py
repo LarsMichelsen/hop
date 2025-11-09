@@ -512,12 +512,20 @@ def test_hop_app_handle_new_branch_input_success(sample_branches: list[BranchInf
     app.show_status = Mock()  # type: ignore[method-assign]
     app.refresh_branches = Mock()  # type: ignore[method-assign]
 
-    with patch("hop.ui.create_branch"):
+    with (
+        patch("hop.ui.create_branch") as mock_create,
+        patch("hop.ui.checkout_branch") as mock_checkout,
+    ):
         app._handle_new_branch_input("new-feature")  # type: ignore[reportPrivateUsage]
 
-        # Should show status and refresh branches after successful creation
+        # Should create branch
+        mock_create.assert_called_once_with(sample_branches[0].name, "new-feature")
+        # Should checkout new branch
+        mock_checkout.assert_called_once_with("new-feature")
+        # Should show status
         app.show_status.assert_called_once()
-        app.refresh_branches.assert_called_once()
+        # Should refresh branches with focus on new branch
+        app.refresh_branches.assert_called_once_with(focus_branch_name="new-feature")
 
 
 def test_hop_app_handle_new_branch_input_cancelled(sample_branches: list[BranchInfo]) -> None:
@@ -550,11 +558,43 @@ def test_hop_app_handle_new_branch_input_error(sample_branches: list[BranchInfo]
     app.show_status = Mock()  # type: ignore[method-assign]
     app.refresh_branches = Mock()  # type: ignore[method-assign]
 
-    with patch("hop.ui.create_branch", side_effect=RuntimeError("Branch already exists")):
+    with (
+        patch("hop.ui.create_branch", side_effect=RuntimeError("Branch already exists")),
+        patch("hop.ui.checkout_branch") as mock_checkout,
+    ):
         app._handle_new_branch_input("existing-branch")  # type: ignore[reportPrivateUsage]
 
         # Should show error status
         app.show_status.assert_called_once_with("Error: Branch already exists")
+        # Should not checkout branch
+        mock_checkout.assert_not_called()
+        # Should not refresh branches
+        app.refresh_branches.assert_not_called()
+
+
+def test_hop_app_handle_new_branch_input_checkout_error(
+    sample_branches: list[BranchInfo],
+) -> None:
+    """Test handling error during branch checkout."""
+    app = HopApp(sample_branches)
+
+    # Mock query_one to return a mock BranchList
+    mock_branch_list = Mock()
+    mock_branch_list.cursor_row = 0
+    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    app.show_status = Mock()  # type: ignore[method-assign]
+    app.refresh_branches = Mock()  # type: ignore[method-assign]
+
+    with (
+        patch("hop.ui.create_branch") as mock_create,
+        patch("hop.ui.checkout_branch", side_effect=RuntimeError("Checkout failed")),
+    ):
+        app._handle_new_branch_input("new-feature")  # type: ignore[reportPrivateUsage]
+
+        # Should create branch
+        mock_create.assert_called_once()
+        # Should show error status
+        app.show_status.assert_called_once_with("Error: Checkout failed")
         # Should not refresh branches
         app.refresh_branches.assert_not_called()
 
