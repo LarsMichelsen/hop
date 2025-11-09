@@ -443,9 +443,9 @@ class HopApp(App[None]):
         with Horizontal(id="footer-container"):
             yield Static("Ready", id="status")
             yield Static(
-                "[[underline cyan]c[/]]heckout  [[underline cyan]r[/]]ebase  "
-                "[[underline cyan]n[/]]ew  [[underline cyan]d[/]]elete  "
-                "[[underline cyan]q[/]]uit",
+                "[underline cyan]c[/]heckout  [underline cyan]r[/]ebase  "
+                "[underline cyan]n[/]ew  [underline cyan]d[/]elete  "
+                "[underline cyan]q[/]uit",
                 id="controls",
             )
 
