@@ -437,16 +437,17 @@ class HopApp(App[None]):
 
         # Controls bar with highlighted shortcut keys
         controls_text = Text.assemble(
-            ("c", "bold cyan"),
-            "heckout, ",
-            ("r", "bold cyan"),
-            "ebase, ",
-            ("n", "bold cyan"),
-            "ew, ",
-            ("d", "bold cyan"),
-            "elete, ",
-            ("q", "bold cyan"),
-            "uit",
+            "[",
+            ("c", "bold white on blue"),
+            "]heckout  [",
+            ("r", "bold white on blue"),
+            "]ebase  [",
+            ("n", "bold white on blue"),
+            "]ew  [",
+            ("d", "bold white on blue"),
+            "]elete  [",
+            ("q", "bold white on blue"),
+            "]uit",
         )
         yield Static(controls_text, id="controls")
         yield Static("Ready", id="status")
