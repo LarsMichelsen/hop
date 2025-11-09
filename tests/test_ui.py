@@ -474,13 +474,15 @@ def test_hop_app_action_new_branch_success(sample_branches: list[BranchInfo]) ->
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
     app.push_screen = Mock()  # type: ignore[method-assign]
 
-    app.action_new_branch()
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
+        app.action_new_branch()
 
-    # Should show input dialog
-    app.push_screen.assert_called_once()
-    # Verify it's calling BranchNameInputScreen with correct source branch
-    args, _ = app.push_screen.call_args
-    assert args[0].source_branch == sample_branches[0].name
+        # Should show input dialog
+        app.push_screen.assert_called_once()
+        # Verify it's calling BranchNameInputScreen with correct source branch
+        args, _ = app.push_screen.call_args
+        assert args[0].source_branch == sample_branches[0].name
 
 
 def test_hop_app_action_new_branch_invalid_cursor(sample_branches: list[BranchInfo]) -> None:
@@ -620,3 +622,53 @@ def test_run_interactive_ui(sample_branches: list[BranchInfo]) -> None:
         mock_app_class.assert_called_once_with(sample_branches)
         # Should run the app
         mock_app_instance.run.assert_called_once()
+
+
+def test_hop_app_action_new_branch_with_prefix(sample_branches: list[BranchInfo]) -> None:
+    """Test new branch action with configured prefix."""
+    app = HopApp(sample_branches)
+
+    # Mock query_one to return a mock BranchList
+    mock_branch_list = Mock()
+    mock_branch_list.cursor_row = 0
+    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    app.push_screen = Mock()  # type: ignore[method-assign]
+
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(
+            branch_prefixes={"main": "feature/"}, default_branch_prefix=""
+        )
+        app.action_new_branch()
+
+        # Should show input dialog
+        app.push_screen.assert_called_once()
+        # Verify it's calling BranchNameInputScreen with correct prefix
+        args, _ = app.push_screen.call_args
+        assert args[0].source_branch == "main"
+        assert args[0].prefix == "feature/"
+
+
+def test_hop_app_action_new_branch_with_default_prefix(
+    sample_branches: list[BranchInfo],
+) -> None:
+    """Test new branch action with default prefix."""
+    app = HopApp(sample_branches)
+
+    # Mock query_one to return a mock BranchList
+    mock_branch_list = Mock()
+    mock_branch_list.cursor_row = 1
+    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    app.push_screen = Mock()  # type: ignore[method-assign]
+
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(
+            branch_prefixes={"main": "feature/"}, default_branch_prefix="hotfix/"
+        )
+        app.action_new_branch()
+
+        # Should show input dialog
+        app.push_screen.assert_called_once()
+        # Verify it's using default prefix for 'feature' branch
+        args, _ = app.push_screen.call_args
+        assert args[0].source_branch == "feature"
+        assert args[0].prefix == "hotfix/"

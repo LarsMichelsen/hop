@@ -11,6 +11,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Input, Label, Static
 from textual.worker import Worker
 
+from hop.config import get_prefix_for_branch, load_config
 from hop.git import (
     BranchInfo,
     checkout_branch,
@@ -213,15 +214,20 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
     }
     """
 
-    def __init__(self, source_branch: str) -> None:
+    def __init__(self, source_branch: str, prefix: str = "") -> None:
         super().__init__()
         self.source_branch = source_branch
+        self.prefix = prefix
 
     def compose(self) -> ComposeResult:
         """Compose the input dialog."""
         with Container(id="input-dialog"):
             yield Label(f"Create new branch from '{self.source_branch}'", id="input-title")
-            yield Input(placeholder="Enter branch name...", id="input-field")
+            yield Input(
+                value=self.prefix,
+                placeholder="Enter branch name...",
+                id="input-field",
+            )
             with Horizontal(id="input-button-container"):
                 yield Button("Create", variant="primary", id="create")
                 yield Button("Cancel", id="cancel")
@@ -573,9 +579,11 @@ class HopApp(App[None]):
 
         source_branch = self.branches[cursor_row]
 
-        # Show input dialog for branch name
+        config = load_config()
+        prefix = get_prefix_for_branch(source_branch.name, config)
+
         self.push_screen(
-            BranchNameInputScreen(source_branch.name),
+            BranchNameInputScreen(source_branch.name, prefix),
             self._handle_new_branch_input,
         )
 

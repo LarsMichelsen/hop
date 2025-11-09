@@ -25,6 +25,8 @@
     * Navigate the list of branches via up and down arrow keys and j and k
     * Trigger actions with "c" for checkout, "r" for rebase and "d" for delete
     * Create new branch from currently selected branch with "n" (prompts for branch name)
+        * Supports configurable branch prefixes via `~/.config/hop/config.toml`
+        * Prefix is pre-populated in the input field but can be edited by the user
 * Performance
     * It is crucial that the command starts and shows the branch list as fast as possible for a great experience
     * In case information is expensive to compute, leave it out or make it an asynchronous computation and add it once the computation is finished

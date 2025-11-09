@@ -1,0 +1,19 @@
+# Example configuration file for hop
+# Place this file at: ~/.config/hop/config.toml
+
+# Default prefix for branches not specified in [branch_prefixes]
+[defaults]
+branch_prefix = ""
+
+# Branch-specific prefixes
+# Maps base branch names to prefixes for new branches created from them
+[branch_prefixes]
+main = "feature/"
+master = "feature/"
+develop = "feat/"
+staging = "hotfix/"
+production = "hotfix/"
+
+# Example with branch names containing special characters
+# Use quotes for branch names with slashes or other special characters
+# "release/v1.0" = "bugfix/"
