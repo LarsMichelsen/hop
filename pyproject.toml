@@ -23,7 +23,7 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "--cov=hop --cov-report=term-missing --cov-report=term:skip-covered --cov-fail-under=65"
+addopts = "--cov=hop --cov-report=term-missing --cov-report=term:skip-covered --cov-fail-under=75"
 
 [tool.coverage.run]
 source = ["src/hop"]

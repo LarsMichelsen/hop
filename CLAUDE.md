@@ -75,7 +75,7 @@ uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright &
 
 **Coverage failure example:**
 ```
-ERROR: Coverage failure: total of 60.00 is less than fail-under=65.00
+ERROR: Coverage failure: total of 70.00 is less than fail-under=75.00
 ```
 
 **What to do:**
