@@ -284,15 +284,15 @@ class BranchList(DataTable):  # type: ignore[misc]
 
         status = branch.track_status if branch.track_status else "  "
 
-        # Apply colors based on track status
+        # Apply colors based on track status (using terminal palette)
         if status == "=":
-            return Text(status, style="green")
+            return Text(status, style="bright_green")
         elif status == "<":
-            return Text(status, style="yellow")
+            return Text(status, style="bright_yellow")
         elif status == ">":
-            return Text(status, style="cyan")
+            return Text(status, style="bright_cyan")
         elif status == "<>":
-            return Text(status, style="red")
+            return Text(status, style="bright_red")
         else:
             # No upstream or empty status
             return Text(status, style="dim white")
@@ -324,7 +324,7 @@ class BranchList(DataTable):  # type: ignore[misc]
         # Branch name - highlight current branch with colored marker
         if branch.name == self.current_branch:
             branch_name = Text.assemble(
-                ("* ", "bold green"),
+                ("* ", "bold bright_green"),
                 branch.name,
             )
         else:
@@ -347,7 +347,7 @@ class BranchList(DataTable):  # type: ignore[misc]
         # Branch name - highlight current branch with colored marker
         if branch.name == self.current_branch:
             branch_name = Text.assemble(
-                ("* ", "bold green"),
+                ("* ", "bold bright_green"),
                 branch.name,
             )
         else:
@@ -409,7 +409,6 @@ class HopApp(App[None]):
         background: $boost;
         color: $text;
         padding: 0 1;
-        text-style: bold;
     }
 
     #controls {
@@ -444,9 +443,9 @@ class HopApp(App[None]):
         with Horizontal(id="footer-container"):
             yield Static("Ready", id="status")
             yield Static(
-                "[underline yellow]c[/]heckout  [underline yellow]r[/]ebase  "
-                "[underline yellow]n[/]ew  [underline yellow]d[/]elete  "
-                "[underline yellow]q[/]uit",
+                "[underline]c[/]heckout  [underline]r[/]ebase  "
+                "[underline]n[/]ew  [underline]d[/]elete  "
+                "[underline]q[/]uit",
                 id="controls",
             )
 
