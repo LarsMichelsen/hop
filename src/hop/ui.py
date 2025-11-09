@@ -6,7 +6,7 @@ from typing import ClassVar
 from rich.text import Text
 from textual import events, work
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, VerticalScroll
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Label, Static
 from textual.worker import Worker
@@ -396,8 +396,12 @@ class HopApp(App[None]):
         height: 1fr;
     }
 
-    #status {
+    #footer-container {
         dock: bottom;
+        height: auto;
+    }
+
+    #status {
         height: 1;
         background: $boost;
         color: $text;
@@ -406,7 +410,6 @@ class HopApp(App[None]):
     }
 
     #controls {
-        dock: bottom;
         height: 1;
         background: $primary;
         color: $text;
@@ -435,13 +438,14 @@ class HopApp(App[None]):
     def compose(self) -> ComposeResult:
         """Compose the UI."""
         yield BranchList(self.branches)
-        yield Static(
-            "[bold white on blue]c[/]heckout  [bold white on blue]r[/]ebase  "
-            "[bold white on blue]n[/]ew  [bold white on blue]d[/]elete  "
-            "[bold white on blue]q[/]uit",
-            id="controls",
-        )
-        yield Static("Ready", id="status")
+        with Vertical(id="footer-container"):
+            yield Static("Ready", id="status")
+            yield Static(
+                "[bold white on blue]c[/]heckout  [bold white on blue]r[/]ebase  "
+                "[bold white on blue]n[/]ew  [bold white on blue]d[/]elete  "
+                "[bold white on blue]q[/]uit",
+                id="controls",
+            )
 
     def on_mount(self) -> None:
         """Start loading metadata when app is mounted."""
