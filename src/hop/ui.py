@@ -437,9 +437,9 @@ class HopApp(App[None]):
         yield BranchList(self.branches)
         yield Static("Ready", id="status")
         yield Static(
-            "[[bold white on blue]c[/]]heckout  [[bold white on blue]r[/]]ebase  "
-            "[[bold white on blue]n[/]]ew  [[bold white on blue]d[/]]elete  "
-            "[[bold white on blue]q[/]]uit",
+            "[bold white on blue]c[/]heckout  [bold white on blue]r[/]ebase  "
+            "[bold white on blue]n[/]ew  [bold white on blue]d[/]elete  "
+            "[bold white on blue]q[/]uit",
             id="controls",
         )
 
