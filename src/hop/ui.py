@@ -397,6 +397,11 @@ class HopApp(App[None]):
         height: 1fr;
     }
 
+    /* Use dimmer highlight for focused cursor */
+    DataTable:focus > .datatable--cursor {
+        background: $panel;
+    }
+
     #footer-container {
         dock: bottom;
         height: 1;
@@ -407,7 +412,6 @@ class HopApp(App[None]):
         width: 1fr;
         height: 1;
         background: $boost;
-        color: $text;
         padding: 0 1;
     }
 
@@ -415,7 +419,6 @@ class HopApp(App[None]):
         width: auto;
         height: 1;
         background: $boost;
-        color: $text;
         padding: 0 1;
     }
     """
