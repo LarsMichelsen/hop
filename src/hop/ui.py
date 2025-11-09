@@ -301,6 +301,7 @@ class BranchList(DataTable):  # type: ignore[misc]
         """Set up the table when mounted."""
         self.cursor_type = "row"
         self.zebra_stripes = True
+        self.show_header = False
 
         # Add columns
         self.add_column("Date", width=10)  # type: ignore[misc]
@@ -443,9 +444,9 @@ class HopApp(App[None]):
         with Horizontal(id="footer-container"):
             yield Static("Ready", id="status")
             yield Static(
-                "[underline cyan]c[/]heckout  [underline cyan]r[/]ebase  "
-                "[underline cyan]n[/]ew  [underline cyan]d[/]elete  "
-                "[underline cyan]q[/]uit",
+                "[underline yellow]c[/]heckout  [underline yellow]r[/]ebase  "
+                "[underline yellow]n[/]ew  [underline yellow]d[/]elete  "
+                "[underline yellow]q[/]uit",
                 id="controls",
             )
 
