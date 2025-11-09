@@ -8,7 +8,14 @@ from rich.text import Text
 from textual.widgets import Static
 
 from hop.git import BranchInfo
-from hop.ui import BranchList, HopApp, run_interactive_ui
+from hop.ui import (
+    BranchList,
+    BranchNameInputScreen,
+    ConfirmDeleteScreen,
+    HelpScreen,
+    HopApp,
+    run_interactive_ui,
+)
 
 
 @pytest.fixture
@@ -712,3 +719,303 @@ def test_hop_app_action_new_branch_with_default_prefix(
         args, _ = app.push_screen.call_args
         assert args[0].source_branch == "feature"
         assert args[0].prefix == "hotfix/"
+
+
+def test_help_screen_button_press() -> None:
+    """Test HelpScreen button press dismisses screen."""
+    screen = HelpScreen()
+    screen.dismiss = Mock()  # type: ignore[method-assign]
+
+    # Create a mock button event
+    mock_button = Mock()
+    mock_button.id = "close"
+    mock_event = Mock()
+    mock_event.button = mock_button
+
+    screen.on_button_pressed(mock_event)
+    screen.dismiss.assert_called_once()
+
+
+def test_confirm_delete_screen_confirm_button() -> None:
+    """Test ConfirmDeleteScreen confirm button dismisses with True."""
+    screen = ConfirmDeleteScreen("test-branch", "=", True)
+    screen.dismiss = Mock()  # type: ignore[method-assign]
+
+    mock_button = Mock()
+    mock_button.id = "confirm"
+    mock_event = Mock()
+    mock_event.button = mock_button
+
+    screen.on_button_pressed(mock_event)
+    screen.dismiss.assert_called_once_with(True)
+
+
+def test_confirm_delete_screen_cancel_button() -> None:
+    """Test ConfirmDeleteScreen cancel button dismisses with False."""
+    screen = ConfirmDeleteScreen("test-branch", "=", True)
+    screen.dismiss = Mock()  # type: ignore[method-assign]
+
+    mock_button = Mock()
+    mock_button.id = "cancel"
+    mock_event = Mock()
+    mock_event.button = mock_button
+
+    screen.on_button_pressed(mock_event)
+    screen.dismiss.assert_called_once_with(False)
+
+
+def test_branch_name_input_screen_create_button_with_name() -> None:
+    """Test BranchNameInputScreen create button with valid name."""
+    screen = BranchNameInputScreen("main")
+    screen.dismiss = Mock()  # type: ignore[method-assign]
+
+    # Mock input field
+    mock_input = Mock()
+    mock_input.value = "new-branch"
+    screen.query_one = Mock(return_value=mock_input)  # type: ignore[method-assign]
+
+    mock_button = Mock()
+    mock_button.id = "create"
+    mock_event = Mock()
+    mock_event.button = mock_button
+
+    screen.on_button_pressed(mock_event)
+    screen.dismiss.assert_called_once_with("new-branch")
+
+
+def test_branch_name_input_screen_create_button_empty_name() -> None:
+    """Test BranchNameInputScreen create button with empty name."""
+    screen = BranchNameInputScreen("main")
+    screen.dismiss = Mock()  # type: ignore[method-assign]
+
+    # Mock input field with empty value
+    mock_input = Mock()
+    mock_input.value = "   "
+    screen.query_one = Mock(return_value=mock_input)  # type: ignore[method-assign]
+
+    mock_button = Mock()
+    mock_button.id = "create"
+    mock_event = Mock()
+    mock_event.button = mock_button
+
+    screen.on_button_pressed(mock_event)
+    # Should not dismiss if empty
+    screen.dismiss.assert_not_called()
+    # Should refocus input
+    mock_input.focus.assert_called_once()
+
+
+def test_branch_name_input_screen_cancel_button() -> None:
+    """Test BranchNameInputScreen cancel button."""
+    screen = BranchNameInputScreen("main")
+    screen.dismiss = Mock()  # type: ignore[method-assign]
+
+    mock_button = Mock()
+    mock_button.id = "cancel"
+    mock_event = Mock()
+    mock_event.button = mock_button
+
+    screen.on_button_pressed(mock_event)
+    screen.dismiss.assert_called_once_with(None)
+
+
+def test_branch_name_input_screen_submit_with_name() -> None:
+    """Test BranchNameInputScreen input submission with valid name."""
+    screen = BranchNameInputScreen("main")
+    screen.dismiss = Mock()  # type: ignore[method-assign]
+
+    mock_event = Mock()
+    mock_event.value = "new-branch"
+
+    screen.on_input_submitted(mock_event)
+    screen.dismiss.assert_called_once_with("new-branch")
+
+
+def test_branch_name_input_screen_submit_empty_name() -> None:
+    """Test BranchNameInputScreen input submission with empty name."""
+    screen = BranchNameInputScreen("main")
+    screen.dismiss = Mock()  # type: ignore[method-assign]
+
+    mock_event = Mock()
+    mock_event.value = "   "
+
+    screen.on_input_submitted(mock_event)
+    # Should not dismiss if empty
+    screen.dismiss.assert_not_called()
+
+
+def test_branch_list_format_status_behind() -> None:
+    """Test BranchList status formatting for behind status."""
+    with patch("hop.ui.get_current_branch", return_value="main"):
+        branch = BranchInfo(
+            name="test",
+            creator_date=datetime(2025, 1, 1),
+            last_commit_message="Test",
+            track_status="<",
+            is_loading=False,
+        )
+        branch_list = BranchList([branch])
+        status = branch_list._format_status(branch)  # type: ignore[reportPrivateUsage]
+        assert isinstance(status, Text)
+        assert status.plain == "<"
+
+
+def test_branch_list_format_status_ahead() -> None:
+    """Test BranchList status formatting for ahead status."""
+    with patch("hop.ui.get_current_branch", return_value="main"):
+        branch = BranchInfo(
+            name="test",
+            creator_date=datetime(2025, 1, 1),
+            last_commit_message="Test",
+            track_status=">",
+            is_loading=False,
+        )
+        branch_list = BranchList([branch])
+        status = branch_list._format_status(branch)  # type: ignore[reportPrivateUsage]
+        assert isinstance(status, Text)
+        assert status.plain == ">"
+
+
+def test_branch_list_format_status_diverged() -> None:
+    """Test BranchList status formatting for diverged status."""
+    with patch("hop.ui.get_current_branch", return_value="main"):
+        branch = BranchInfo(
+            name="test",
+            creator_date=datetime(2025, 1, 1),
+            last_commit_message="Test",
+            track_status="<>",
+            is_loading=False,
+        )
+        branch_list = BranchList([branch])
+        status = branch_list._format_status(branch)  # type: ignore[reportPrivateUsage]
+        assert isinstance(status, Text)
+        assert status.plain == "<>"
+
+
+def test_branch_list_format_status_no_upstream() -> None:
+    """Test BranchList status formatting for no upstream."""
+    with patch("hop.ui.get_current_branch", return_value="main"):
+        branch = BranchInfo(
+            name="test",
+            creator_date=datetime(2025, 1, 1),
+            last_commit_message="Test",
+            track_status="",
+            is_loading=False,
+        )
+        branch_list = BranchList([branch])
+        status = branch_list._format_status(branch)  # type: ignore[reportPrivateUsage]
+        assert isinstance(status, Text)
+        assert status.plain == "  "
+
+
+def test_branch_list_remove_branch_invalid_index() -> None:
+    """Test BranchList remove_branch with invalid index."""
+    with patch("hop.ui.get_current_branch", return_value="main"):
+        branches = [
+            BranchInfo(
+                name="test1",
+                creator_date=datetime(2025, 1, 1),
+                last_commit_message="Test 1",
+            ),
+            BranchInfo(
+                name="test2",
+                creator_date=datetime(2025, 1, 2),
+                last_commit_message="Test 2",
+            ),
+        ]
+        branch_list = BranchList(branches)
+
+        # Try to remove with negative index
+        branch_list.remove_branch(-1)
+        assert len(branch_list.branches) == 2
+
+        # Try to remove with out of range index
+        branch_list.remove_branch(10)
+        assert len(branch_list.branches) == 2
+
+
+def test_hop_app_action_help(sample_branches: list[BranchInfo]) -> None:
+    """Test help action shows help screen."""
+    app = HopApp(sample_branches)
+    app.push_screen = Mock()  # type: ignore[method-assign]
+
+    app.action_help()
+
+    # Should push HelpScreen
+    app.push_screen.assert_called_once()
+    args, _ = app.push_screen.call_args
+    assert isinstance(args[0], HelpScreen)
+
+
+def test_help_screen_init() -> None:
+    """Test HelpScreen initialization."""
+    screen = HelpScreen()
+    assert screen is not None
+
+
+def test_confirm_delete_screen_init() -> None:
+    """Test ConfirmDeleteScreen initialization."""
+    screen = ConfirmDeleteScreen("test", ">", False)
+    assert screen.branch_name == "test"
+    assert screen.track_status == ">"
+    assert screen.is_merged is False
+
+
+def test_branch_name_input_screen_init() -> None:
+    """Test BranchNameInputScreen initialization."""
+    screen = BranchNameInputScreen("main", "feature/")
+    assert screen.source_branch == "main"
+    assert screen.prefix == "feature/"
+
+
+def test_branch_name_input_screen_init_no_prefix() -> None:
+    """Test BranchNameInputScreen initialization without prefix."""
+    screen = BranchNameInputScreen("develop")
+    assert screen.source_branch == "develop"
+    assert screen.prefix == ""
+
+
+def test_hop_app_compose(sample_branches: list[BranchInfo]) -> None:
+    """Test HopApp compose method."""
+    app = HopApp(sample_branches)
+    # Just verify compose returns widgets without errors
+    widgets = list(app.compose())
+    assert len(widgets) == 3  # BranchList, Footer, Static
+
+
+def test_hop_app_show_status_update(sample_branches: list[BranchInfo]) -> None:
+    """Test HopApp show_status updates correctly."""
+    app = HopApp(sample_branches)
+    mock_static = Mock()
+    app.query_one = Mock(return_value=mock_static)  # type: ignore[method-assign]
+
+    app.show_status("Test message")
+
+    mock_static.update.assert_called_once_with("Test message")
+
+
+def test_branch_list_update_branch_current_branch() -> None:
+    """Test updating a branch that is the current branch."""
+    with patch("hop.ui.get_current_branch", return_value="test"):
+        branch = BranchInfo(
+            name="test",
+            creator_date=datetime(2025, 1, 1),
+            last_commit_message="Original",
+        )
+        branch_list = BranchList([branch])
+        branch_list.update_cell_at = Mock()  # type: ignore[method-assign]
+
+        # Update with new metadata
+        updated_branch = BranchInfo(
+            name="test",
+            creator_date=datetime(2025, 1, 1),
+            last_commit_message="Updated",
+            upstream="origin/test",
+            track_status="=",
+            is_loading=False,
+        )
+
+        branch_list.update_branch(updated_branch, 0)
+
+        # Should update cells
+        assert branch_list.update_cell_at.call_count == 4
