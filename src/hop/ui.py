@@ -234,7 +234,9 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
 
     def on_mount(self) -> None:
         """Focus the input field when mounted."""
-        self.query_one(Input).focus()
+        input_field = self.query_one(Input)
+        input_field.focus()
+        input_field.cursor_position = len(input_field.value)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
