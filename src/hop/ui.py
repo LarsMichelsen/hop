@@ -408,9 +408,10 @@ class HopApp(App[None]):
     #controls {
         dock: bottom;
         height: 1;
-        background: $panel;
+        background: $primary;
         color: $text;
         padding: 0 1;
+        text-style: bold;
     }
     """
 
@@ -434,23 +435,13 @@ class HopApp(App[None]):
     def compose(self) -> ComposeResult:
         """Compose the UI."""
         yield BranchList(self.branches)
-
-        # Controls bar with highlighted shortcut keys
-        controls_text = Text.assemble(
-            "[",
-            ("c", "bold white on blue"),
-            "]heckout  [",
-            ("r", "bold white on blue"),
-            "]ebase  [",
-            ("n", "bold white on blue"),
-            "]ew  [",
-            ("d", "bold white on blue"),
-            "]elete  [",
-            ("q", "bold white on blue"),
-            "]uit",
-        )
-        yield Static(controls_text, id="controls")
         yield Static("Ready", id="status")
+        yield Static(
+            "[[bold white on blue]c[/]]heckout  [[bold white on blue]r[/]]ebase  "
+            "[[bold white on blue]n[/]]ew  [[bold white on blue]d[/]]elete  "
+            "[[bold white on blue]q[/]]uit",
+            id="controls",
+        )
 
     def on_mount(self) -> None:
         """Start loading metadata when app is mounted."""
