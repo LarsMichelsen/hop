@@ -395,6 +395,7 @@ class HopApp(App[None]):
     CSS = """
     BranchList {
         height: 1fr;
+        overflow-x: hidden;
     }
 
     /* Use dimmer highlight for focused cursor */
