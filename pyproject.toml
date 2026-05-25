@@ -7,7 +7,7 @@ name = "hop"
 version = "0.1.0"
 description = "Git branch management tool for quick branch hopping"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "textual>=6.5.0",
 ]
@@ -45,11 +45,11 @@ exclude_lines = [
 
 [tool.basedpyright]
 typeCheckingMode = "strict"
-pythonVersion = "3.14"
+pythonVersion = "3.12"
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [

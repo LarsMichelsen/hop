@@ -181,7 +181,7 @@ ERROR: Coverage failure: total of X.XX is less than fail-under=Y.YY
 ## Configuration
 
 All tool configurations are in `pyproject.toml`:
-- **ruff**: Line length 100, Python 3.14 target
+- **ruff**: Line length 100, Python 3.12 target
 - **basedpyright**: Strict type checking mode
 - **pytest**: Test discovery in `tests/` directory
 - **coverage**: Minimum threshold, branch coverage enabled
