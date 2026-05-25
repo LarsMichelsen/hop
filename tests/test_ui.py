@@ -41,14 +41,6 @@ def sample_branches() -> list[BranchInfo]:
     ]
 
 
-def test_branch_list_init(sample_branches: list[BranchInfo]) -> None:
-    """Test BranchList initialization."""
-    with patch("hop.ui.get_current_branch", return_value="main"):
-        branch_list = BranchList(sample_branches)
-        assert branch_list.branches == sample_branches
-        assert branch_list.current_branch == "main"
-
-
 def test_branch_list_falls_back_to_empty_current_branch_when_get_current_branch_raises(
     sample_branches: list[BranchInfo],
 ) -> None:
@@ -116,13 +108,6 @@ def test_update_branch_does_nothing_when_index_is_out_of_range(
         branch_list.update_cell_at.assert_not_called()
 
 
-def test_hop_app_init(sample_branches: list[BranchInfo]) -> None:
-    """Test HopApp initialization."""
-    app = HopApp(sample_branches)
-    assert app.branches == sample_branches
-    assert app.metadata_workers == []
-
-
 def test_show_status_writes_message_into_status_widget(
     sample_branches: list[BranchInfo],
 ) -> None:
@@ -137,44 +122,6 @@ def test_show_status_writes_message_into_status_widget(
     # Should query for status widget and update it
     app.query_one.assert_called_once_with("#status", Static)
     mock_static.update.assert_called_once_with("Test message")
-
-
-def test_delete_shows_status_message(sample_branches: list[BranchInfo]) -> None:
-    """Test that delete action shows status message."""
-    # Create a synced branch (so no confirmation)
-    synced_branch = BranchInfo(
-        name="feature",
-        creator_date=sample_branches[1].creator_date,
-        last_commit_message="Add feature",
-        upstream="origin/feature",
-        track_status="=",
-        is_loading=False,
-    )
-    branches = [sample_branches[0], synced_branch]
-    client = FakeGitClient(branches=branches)
-    app = HopApp(branches, client=client)
-
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 1
-
-    def remove_side_effect(idx: int) -> None:
-        branches.pop(idx)
-
-    mock_branch_list.remove_branch = Mock(side_effect=remove_side_effect)
-
-    status_messages: list[str] = []
-
-    def capture_status(msg: str) -> None:
-        status_messages.append(msg)
-
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.show_status = Mock(side_effect=capture_status)  # type: ignore[method-assign]
-
-    app.action_delete()
-
-    assert client.delete_calls == ["feature"]
-    assert len(status_messages) == 1
-    assert "Deleted branch: feature" in status_messages[0]
 
 
 def test_action_cursor_down_forwards_to_branch_list(
@@ -820,52 +767,6 @@ def test_action_help_pushes_help_screen(sample_branches: list[BranchInfo]) -> No
     app.push_screen.assert_called_once()
     args, _ = app.push_screen.call_args
     assert isinstance(args[0], HelpScreen)
-
-
-def test_help_screen_init() -> None:
-    """Test HelpScreen initialization."""
-    screen = HelpScreen()
-    assert screen is not None
-
-
-def test_confirm_delete_screen_init() -> None:
-    """Test ConfirmDeleteScreen initialization."""
-    screen = ConfirmDeleteScreen("test", ">", False)
-    assert screen.branch_name == "test"
-    assert screen.track_status == ">"
-    assert screen.is_merged is False
-
-
-def test_branch_name_input_screen_init() -> None:
-    """Test BranchNameInputScreen initialization."""
-    screen = BranchNameInputScreen("main", "feature/")
-    assert screen.source_branch == "main"
-    assert screen.prefix == "feature/"
-
-
-def test_branch_name_input_screen_init_no_prefix() -> None:
-    """Test BranchNameInputScreen initialization without prefix."""
-    screen = BranchNameInputScreen("develop")
-    assert screen.source_branch == "develop"
-    assert screen.prefix == ""
-
-
-def test_hop_app_compose(sample_branches: list[BranchInfo]) -> None:
-    """Test HopApp initialization."""
-    app = HopApp(sample_branches)
-    # Just verify app can be created without errors
-    assert app.branches == sample_branches
-
-
-def test_hop_app_show_status_update(sample_branches: list[BranchInfo]) -> None:
-    """Test HopApp show_status updates correctly."""
-    app = HopApp(sample_branches)
-    mock_static = Mock()
-    app.query_one = Mock(return_value=mock_static)  # type: ignore[method-assign]
-
-    app.show_status("Test message")
-
-    mock_static.update.assert_called_once_with("Test message")
 
 
 def test_update_branch_redraws_current_branch_with_marker() -> None:

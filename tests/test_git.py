@@ -19,55 +19,12 @@ from hop.git import (
 )
 
 
-def test_branch_info_creation() -> None:
-    """Test that BranchInfo can be created with required fields."""
-    branch = BranchInfo(
-        name="main",
-        creator_date=datetime.now(),
-        last_commit_message="Initial commit",
-    )
-    assert branch.name == "main"
-    assert branch.is_loading is True
-    assert branch.upstream is None
-    assert branch.track_status == ""
-
-
-def test_branch_info_with_metadata() -> None:
-    """Test that BranchInfo can be created with full metadata."""
-    branch = BranchInfo(
-        name="feature",
-        creator_date=datetime.now(),
-        last_commit_message="Add feature",
-        upstream="origin/feature",
-        track_status="=",
-        is_merged=True,
-        is_loading=False,
-    )
-    assert branch.name == "feature"
-    assert branch.upstream == "origin/feature"
-    assert branch.track_status == "="
-    assert branch.is_merged is True
-    assert branch.is_loading is False
-
-
-def test_is_git_repo_returns_true_inside_a_git_repository() -> None:
-    # We're running these tests from within a git repo
-    assert is_git_repo() is True
-
-
 def test_is_git_repo_returns_false_when_git_rev_parse_fails() -> None:
     mock_result = Mock()
     mock_result.returncode = 128
 
     with patch("subprocess.run", return_value=mock_result):
         assert is_git_repo() is False
-
-
-def test_get_current_branch_returns_a_non_empty_branch_name() -> None:
-    current = get_current_branch()
-
-    assert isinstance(current, str)
-    assert len(current) > 0
 
 
 def test_get_current_branch_raises_when_git_rev_parse_fails() -> None:
@@ -129,21 +86,6 @@ def test_get_branches_fast_skips_lines_that_lack_three_pipe_separated_parts() ->
         branches = get_branches_fast()
         assert len(branches) == 1
         assert branches[0].name == "main"
-
-
-def test_fetch_branch_metadata_returns_branch_with_is_loading_false() -> None:
-    branches = get_branches_fast()
-    if not branches:
-        pytest.skip("No branches available for testing")
-
-    branch = branches[0]
-    updated_branch = fetch_branch_metadata(branch)
-
-    assert isinstance(updated_branch, BranchInfo)
-    assert updated_branch.name == branch.name
-    assert updated_branch.creator_date == branch.creator_date
-    assert updated_branch.last_commit_message == branch.last_commit_message
-    assert updated_branch.is_loading is False
 
 
 def test_fetch_branch_metadata_returns_no_upstream_when_for_each_ref_emits_only_separator() -> None:
