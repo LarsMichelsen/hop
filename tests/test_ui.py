@@ -49,8 +49,9 @@ def test_branch_list_init(sample_branches: list[BranchInfo]) -> None:
         assert branch_list.current_branch == "main"
 
 
-def test_branch_list_init_no_current_branch(sample_branches: list[BranchInfo]) -> None:
-    """Test BranchList initialization when get_current_branch fails."""
+def test_branch_list_falls_back_to_empty_current_branch_when_get_current_branch_raises(
+    sample_branches: list[BranchInfo],
+) -> None:
     with patch("hop.ui.get_current_branch", side_effect=RuntimeError("Not in a repo")):
         branch_list = BranchList(sample_branches)
         assert branch_list.branches == sample_branches
@@ -68,8 +69,9 @@ def test_format_branch_name_returns_plain_name_for_other_branches() -> None:
     assert result == "feature"
 
 
-def test_branch_list_update_branch(sample_branches: list[BranchInfo]) -> None:
-    """Test updating a branch row."""
+def test_update_branch_replaces_entry_and_redraws_all_four_cells(
+    sample_branches: list[BranchInfo],
+) -> None:
     with patch("hop.ui.get_current_branch", return_value="main"):
         branch_list = BranchList(sample_branches)
         branch_list.update_cell_at = Mock()  # type: ignore[method-assign]
@@ -92,8 +94,9 @@ def test_branch_list_update_branch(sample_branches: list[BranchInfo]) -> None:
         assert branch_list.update_cell_at.call_count == 4
 
 
-def test_branch_list_update_branch_out_of_range(sample_branches: list[BranchInfo]) -> None:
-    """Test updating a branch row with invalid index."""
+def test_update_branch_does_nothing_when_index_is_out_of_range(
+    sample_branches: list[BranchInfo],
+) -> None:
     with patch("hop.ui.get_current_branch", return_value="main"):
         branch_list = BranchList(sample_branches)
         branch_list.update_cell_at = Mock()  # type: ignore[method-assign]
@@ -118,8 +121,9 @@ def test_hop_app_init(sample_branches: list[BranchInfo]) -> None:
     assert app.metadata_workers == []
 
 
-def test_hop_app_show_status(sample_branches: list[BranchInfo]) -> None:
-    """Test showing status message."""
+def test_show_status_writes_message_into_status_widget(
+    sample_branches: list[BranchInfo],
+) -> None:
     app = HopApp(sample_branches)
 
     # Mock query_one to return a mock Static widget
@@ -171,8 +175,9 @@ def test_delete_shows_status_message(sample_branches: list[BranchInfo]) -> None:
     assert "Deleted branch: feature" in status_messages[0]
 
 
-def test_hop_app_action_cursor_down(sample_branches: list[BranchInfo]) -> None:
-    """Test cursor down action."""
+def test_action_cursor_down_forwards_to_branch_list(
+    sample_branches: list[BranchInfo],
+) -> None:
     app = HopApp(sample_branches)
 
     # Mock query_one to return a mock BranchList
@@ -185,8 +190,9 @@ def test_hop_app_action_cursor_down(sample_branches: list[BranchInfo]) -> None:
     mock_branch_list.action_cursor_down.assert_called_once()
 
 
-def test_hop_app_action_cursor_up(sample_branches: list[BranchInfo]) -> None:
-    """Test cursor up action."""
+def test_action_cursor_up_forwards_to_branch_list(
+    sample_branches: list[BranchInfo],
+) -> None:
     app = HopApp(sample_branches)
 
     # Mock query_one to return a mock BranchList
@@ -199,8 +205,9 @@ def test_hop_app_action_cursor_up(sample_branches: list[BranchInfo]) -> None:
     mock_branch_list.action_cursor_up.assert_called_once()
 
 
-def test_hop_app_action_checkout_success(sample_branches: list[BranchInfo]) -> None:
-    """Test successful checkout action."""
+def test_action_checkout_invokes_client_and_refreshes(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
@@ -215,8 +222,9 @@ def test_hop_app_action_checkout_success(sample_branches: list[BranchInfo]) -> N
     app.refresh_branches.assert_called_once()
 
 
-def test_hop_app_action_checkout_error(sample_branches: list[BranchInfo]) -> None:
-    """Test checkout action with error."""
+def test_action_checkout_shows_error_status_and_skips_refresh_on_checkout_failure(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
     client.checkout_error = RuntimeError("Checkout failed")
     app = HopApp(sample_branches, client=client)
@@ -233,8 +241,9 @@ def test_hop_app_action_checkout_error(sample_branches: list[BranchInfo]) -> Non
     app.refresh_branches.assert_not_called()
 
 
-def test_hop_app_action_checkout_invalid_cursor(sample_branches: list[BranchInfo]) -> None:
-    """Test checkout action with invalid cursor position."""
+def test_action_checkout_is_noop_for_negative_cursor(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
@@ -247,8 +256,9 @@ def test_hop_app_action_checkout_invalid_cursor(sample_branches: list[BranchInfo
     assert client.checkout_calls == []
 
 
-def test_hop_app_action_checkout_cursor_out_of_range(sample_branches: list[BranchInfo]) -> None:
-    """Test checkout action with cursor out of range."""
+def test_action_checkout_is_noop_when_cursor_past_end(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
@@ -261,8 +271,9 @@ def test_hop_app_action_checkout_cursor_out_of_range(sample_branches: list[Branc
     assert client.checkout_calls == []
 
 
-def test_hop_app_action_rebase_success(sample_branches: list[BranchInfo]) -> None:
-    """Test successful rebase action."""
+def test_action_rebase_invokes_client_and_refreshes(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
@@ -277,8 +288,9 @@ def test_hop_app_action_rebase_success(sample_branches: list[BranchInfo]) -> Non
     app.refresh_branches.assert_called_once()
 
 
-def test_hop_app_action_rebase_error(sample_branches: list[BranchInfo]) -> None:
-    """Test rebase action with error."""
+def test_action_rebase_shows_error_status_and_skips_refresh_on_rebase_failure(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
     client.rebase_error = RuntimeError("Rebase failed")
     app = HopApp(sample_branches, client=client)
@@ -295,8 +307,9 @@ def test_hop_app_action_rebase_error(sample_branches: list[BranchInfo]) -> None:
     app.refresh_branches.assert_not_called()
 
 
-def test_hop_app_action_rebase_invalid_cursor(sample_branches: list[BranchInfo]) -> None:
-    """Test rebase action with invalid cursor position."""
+def test_action_rebase_is_noop_for_negative_cursor(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
@@ -309,8 +322,9 @@ def test_hop_app_action_rebase_invalid_cursor(sample_branches: list[BranchInfo])
     assert client.rebase_calls == []
 
 
-def test_hop_app_action_delete_success(sample_branches: list[BranchInfo]) -> None:
-    """Test successful delete action without confirmation (synced branch)."""
+def test_action_delete_deletes_synced_branch_without_confirmation_prompt(
+    sample_branches: list[BranchInfo],
+) -> None:
     # Create a branch that's synced with upstream (track_status == "=")
     synced_branch = BranchInfo(
         name="feature",
@@ -342,8 +356,9 @@ def test_hop_app_action_delete_success(sample_branches: list[BranchInfo]) -> Non
     assert len(app.branches) == 1
 
 
-def test_hop_app_action_delete_with_confirmation(sample_branches: list[BranchInfo]) -> None:
-    """Test delete action that requires confirmation (unsynced branch)."""
+def test_action_delete_shows_confirmation_screen_for_ahead_branch(
+    sample_branches: list[BranchInfo],
+) -> None:
     # Create a branch that's ahead of upstream (track_status == ">")
     ahead_branch = BranchInfo(
         name="feature",
@@ -368,8 +383,9 @@ def test_hop_app_action_delete_with_confirmation(sample_branches: list[BranchInf
     app.push_screen.assert_called_once()
 
 
-def test_hop_app_action_delete_error(sample_branches: list[BranchInfo]) -> None:
-    """Test delete action with error."""
+def test_action_delete_shows_error_status_and_keeps_branch_on_delete_failure(
+    sample_branches: list[BranchInfo],
+) -> None:
     synced_branch = BranchInfo(
         name="feature",
         creator_date=sample_branches[1].creator_date,
@@ -396,8 +412,9 @@ def test_hop_app_action_delete_error(sample_branches: list[BranchInfo]) -> None:
     assert len(app.branches) == 2
 
 
-def test_hop_app_action_delete_invalid_cursor(sample_branches: list[BranchInfo]) -> None:
-    """Test delete action with invalid cursor position."""
+def test_action_delete_is_noop_when_cursor_past_end(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
@@ -412,8 +429,9 @@ def test_hop_app_action_delete_invalid_cursor(sample_branches: list[BranchInfo])
     app.push_screen.assert_not_called()
 
 
-def test_hop_app_action_new_branch_success(sample_branches: list[BranchInfo]) -> None:
-    """Test successful new branch creation action."""
+def test_action_new_branch_pushes_input_screen_with_source_branch_name(
+    sample_branches: list[BranchInfo],
+) -> None:
     app = HopApp(sample_branches)
 
     # Mock query_one to return a mock BranchList
@@ -433,8 +451,9 @@ def test_hop_app_action_new_branch_success(sample_branches: list[BranchInfo]) ->
         assert args[0].source_branch == sample_branches[0].name
 
 
-def test_hop_app_action_new_branch_invalid_cursor(sample_branches: list[BranchInfo]) -> None:
-    """Test new branch action with invalid cursor position."""
+def test_action_new_branch_is_noop_for_negative_cursor(
+    sample_branches: list[BranchInfo],
+) -> None:
     app = HopApp(sample_branches)
 
     # Mock query_one to return a mock BranchList with invalid cursor
@@ -449,8 +468,9 @@ def test_hop_app_action_new_branch_invalid_cursor(sample_branches: list[BranchIn
     app.push_screen.assert_not_called()
 
 
-def test_hop_app_handle_new_branch_input_success(sample_branches: list[BranchInfo]) -> None:
-    """Test handling successful branch name input."""
+def test_handle_new_branch_input_creates_then_checks_out_and_refreshes(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
@@ -468,8 +488,9 @@ def test_hop_app_handle_new_branch_input_success(sample_branches: list[BranchInf
     app.refresh_branches.assert_called_once_with(focus_branch_name="new-feature")
 
 
-def test_hop_app_handle_new_branch_input_cancelled(sample_branches: list[BranchInfo]) -> None:
-    """Test handling cancelled branch name input."""
+def test_handle_new_branch_input_does_nothing_when_input_is_none(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
@@ -484,8 +505,9 @@ def test_hop_app_handle_new_branch_input_cancelled(sample_branches: list[BranchI
     app.show_status.assert_not_called()
 
 
-def test_hop_app_handle_new_branch_input_error(sample_branches: list[BranchInfo]) -> None:
-    """Test handling error during branch creation."""
+def test_handle_new_branch_input_shows_error_and_skips_checkout_on_create_failure(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
     client.create_error = RuntimeError("Branch already exists")
     app = HopApp(sample_branches, client=client)
@@ -503,10 +525,9 @@ def test_hop_app_handle_new_branch_input_error(sample_branches: list[BranchInfo]
     app.refresh_branches.assert_not_called()
 
 
-def test_hop_app_handle_new_branch_input_checkout_error(
+def test_handle_new_branch_input_shows_error_when_checkout_fails_after_create(
     sample_branches: list[BranchInfo],
 ) -> None:
-    """Test handling error during branch checkout."""
     client = FakeGitClient(branches=sample_branches)
     client.checkout_error = RuntimeError("Checkout failed")
     app = HopApp(sample_branches, client=client)
@@ -524,8 +545,9 @@ def test_hop_app_handle_new_branch_input_checkout_error(
     app.refresh_branches.assert_not_called()
 
 
-def test_hop_app_refresh_branches(sample_branches: list[BranchInfo]) -> None:
-    """Test refreshing the branch list."""
+def test_refresh_branches_remounts_branch_list_with_updated_branches(
+    sample_branches: list[BranchInfo],
+) -> None:
     new_branch = BranchInfo(
         name="new-feature",
         creator_date=sample_branches[0].creator_date,
@@ -563,8 +585,9 @@ def test_hop_app_refresh_branches(sample_branches: list[BranchInfo]) -> None:
     assert len(app.branches) == 3
 
 
-def test_run_interactive_ui(sample_branches: list[BranchInfo]) -> None:
-    """Test running the interactive UI."""
+def test_run_interactive_ui_constructs_HopApp_with_branches_and_client_and_runs_it(
+    sample_branches: list[BranchInfo],
+) -> None:
     client = FakeGitClient(branches=sample_branches)
 
     with patch("hop.ui.HopApp") as mock_app_class:
@@ -577,8 +600,9 @@ def test_run_interactive_ui(sample_branches: list[BranchInfo]) -> None:
         mock_app_instance.run.assert_called_once()
 
 
-def test_hop_app_action_new_branch_with_prefix(sample_branches: list[BranchInfo]) -> None:
-    """Test new branch action with configured prefix."""
+def test_action_new_branch_uses_configured_prefix_for_source_branch(
+    sample_branches: list[BranchInfo],
+) -> None:
     app = HopApp(sample_branches)
 
     # Mock query_one to return a mock BranchList
@@ -601,10 +625,9 @@ def test_hop_app_action_new_branch_with_prefix(sample_branches: list[BranchInfo]
         assert args[0].prefix == "feature/"
 
 
-def test_hop_app_action_new_branch_with_default_prefix(
+def test_action_new_branch_uses_default_prefix_when_branch_has_no_configured_prefix(
     sample_branches: list[BranchInfo],
 ) -> None:
-    """Test new branch action with default prefix."""
     app = HopApp(sample_branches)
 
     # Mock query_one to return a mock BranchList
@@ -627,8 +650,7 @@ def test_hop_app_action_new_branch_with_default_prefix(
         assert args[0].prefix == "hotfix/"
 
 
-def test_help_screen_button_press() -> None:
-    """Test HelpScreen button press dismisses screen."""
+def test_help_screen_close_button_dismisses_the_screen() -> None:
     screen = HelpScreen()
     screen.dismiss = Mock()  # type: ignore[method-assign]
 
@@ -642,8 +664,7 @@ def test_help_screen_button_press() -> None:
     screen.dismiss.assert_called_once()
 
 
-def test_confirm_delete_screen_confirm_button() -> None:
-    """Test ConfirmDeleteScreen confirm button dismisses with True."""
+def test_confirm_delete_screen_confirm_button_dismisses_with_true() -> None:
     screen = ConfirmDeleteScreen("test-branch", "=", True)
     screen.dismiss = Mock()  # type: ignore[method-assign]
 
@@ -656,8 +677,7 @@ def test_confirm_delete_screen_confirm_button() -> None:
     screen.dismiss.assert_called_once_with(True)
 
 
-def test_confirm_delete_screen_cancel_button() -> None:
-    """Test ConfirmDeleteScreen cancel button dismisses with False."""
+def test_confirm_delete_screen_cancel_button_dismisses_with_false() -> None:
     screen = ConfirmDeleteScreen("test-branch", "=", True)
     screen.dismiss = Mock()  # type: ignore[method-assign]
 
@@ -670,8 +690,7 @@ def test_confirm_delete_screen_cancel_button() -> None:
     screen.dismiss.assert_called_once_with(False)
 
 
-def test_branch_name_input_screen_create_button_with_name() -> None:
-    """Test BranchNameInputScreen create button with valid name."""
+def test_branch_name_input_create_button_dismisses_with_entered_name() -> None:
     screen = BranchNameInputScreen("main")
     screen.dismiss = Mock()  # type: ignore[method-assign]
 
@@ -689,8 +708,7 @@ def test_branch_name_input_screen_create_button_with_name() -> None:
     screen.dismiss.assert_called_once_with("new-branch")
 
 
-def test_branch_name_input_screen_create_button_empty_name() -> None:
-    """Test BranchNameInputScreen create button with empty name."""
+def test_branch_name_input_create_button_refocuses_field_when_name_is_blank() -> None:
     screen = BranchNameInputScreen("main")
     screen.dismiss = Mock()  # type: ignore[method-assign]
 
@@ -711,8 +729,7 @@ def test_branch_name_input_screen_create_button_empty_name() -> None:
     mock_input.focus.assert_called_once()
 
 
-def test_branch_name_input_screen_cancel_button() -> None:
-    """Test BranchNameInputScreen cancel button."""
+def test_branch_name_input_cancel_button_dismisses_with_none() -> None:
     screen = BranchNameInputScreen("main")
     screen.dismiss = Mock()  # type: ignore[method-assign]
 
@@ -725,8 +742,7 @@ def test_branch_name_input_screen_cancel_button() -> None:
     screen.dismiss.assert_called_once_with(None)
 
 
-def test_branch_name_input_screen_submit_with_name() -> None:
-    """Test BranchNameInputScreen input submission with valid name."""
+def test_branch_name_input_enter_key_dismisses_with_entered_name() -> None:
     screen = BranchNameInputScreen("main")
     screen.dismiss = Mock()  # type: ignore[method-assign]
 
@@ -737,8 +753,7 @@ def test_branch_name_input_screen_submit_with_name() -> None:
     screen.dismiss.assert_called_once_with("new-branch")
 
 
-def test_branch_name_input_screen_submit_empty_name() -> None:
-    """Test BranchNameInputScreen input submission with empty name."""
+def test_branch_name_input_enter_key_does_nothing_when_name_is_blank() -> None:
     screen = BranchNameInputScreen("main")
     screen.dismiss = Mock()  # type: ignore[method-assign]
 
@@ -788,8 +803,7 @@ def test_format_status_for_branch_without_upstream_renders_dim_blank() -> None:
     assert str(status.style) == "dim white"
 
 
-def test_branch_list_remove_branch_invalid_index() -> None:
-    """Test BranchList remove_branch with invalid index."""
+def test_remove_branch_is_noop_for_out_of_range_indices() -> None:
     with patch("hop.ui.get_current_branch", return_value="main"):
         branches = [
             BranchInfo(
@@ -814,8 +828,7 @@ def test_branch_list_remove_branch_invalid_index() -> None:
         assert len(branch_list.branches) == 2
 
 
-def test_hop_app_action_help(sample_branches: list[BranchInfo]) -> None:
-    """Test help action shows help screen."""
+def test_action_help_pushes_help_screen(sample_branches: list[BranchInfo]) -> None:
     app = HopApp(sample_branches)
     app.push_screen = Mock()  # type: ignore[method-assign]
 
@@ -873,8 +886,7 @@ def test_hop_app_show_status_update(sample_branches: list[BranchInfo]) -> None:
     mock_static.update.assert_called_once_with("Test message")
 
 
-def test_branch_list_update_branch_current_branch() -> None:
-    """Test updating a branch that is the current branch."""
+def test_update_branch_redraws_current_branch_with_marker() -> None:
     with patch("hop.ui.get_current_branch", return_value="test"):
         branch = BranchInfo(
             name="test",

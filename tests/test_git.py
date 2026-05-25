@@ -50,14 +50,12 @@ def test_branch_info_with_metadata() -> None:
     assert branch.is_loading is False
 
 
-def test_is_git_repo() -> None:
-    """Test that we can detect if we're in a git repository."""
+def test_is_git_repo_returns_true_inside_a_git_repository() -> None:
     # We're running these tests from within a git repo
     assert is_git_repo() is True
 
 
-def test_is_git_repo_failure() -> None:
-    """Test that we can detect when not in a git repository."""
+def test_is_git_repo_returns_false_when_git_rev_parse_fails() -> None:
     mock_result = Mock()
     mock_result.returncode = 128
 
@@ -65,16 +63,14 @@ def test_is_git_repo_failure() -> None:
         assert is_git_repo() is False
 
 
-def test_get_current_branch() -> None:
-    """Test that we can get the current branch name."""
+def test_get_current_branch_returns_a_non_empty_branch_name() -> None:
     current = get_current_branch()
-    # Should return a non-empty string
+
     assert isinstance(current, str)
     assert len(current) > 0
 
 
-def test_get_current_branch_error() -> None:
-    """Test that we handle errors when getting current branch."""
+def test_get_current_branch_raises_when_git_rev_parse_fails() -> None:
     mock_result = Mock()
     mock_result.returncode = 1
     mock_result.stderr = "not a git repository"
@@ -86,14 +82,10 @@ def test_get_current_branch_error() -> None:
         get_current_branch()
 
 
-def test_get_branches_fast() -> None:
-    """Test that we can get branches quickly."""
+def test_get_branches_fast_returns_branches_sorted_by_creator_date_descending() -> None:
     branches = get_branches_fast()
 
-    # Should have at least one branch (the current one)
     assert len(branches) > 0
-
-    # Each branch should have the required fields
     for branch in branches:
         assert isinstance(branch.name, str)
         assert len(branch.name) > 0
@@ -102,13 +94,11 @@ def test_get_branches_fast() -> None:
         assert branch.is_loading is True
         assert branch.upstream is None or isinstance(branch.upstream, str)
 
-    # Branches should be sorted by date (most recent first)
     for i in range(len(branches) - 1):
         assert branches[i].creator_date >= branches[i + 1].creator_date
 
 
-def test_get_branches_fast_error() -> None:
-    """Test that we handle errors when getting branches."""
+def test_get_branches_fast_raises_when_git_for_each_ref_fails() -> None:
     mock_result = Mock()
     mock_result.returncode = 1
     mock_result.stderr = "fatal: not a git repository"
@@ -120,125 +110,7 @@ def test_get_branches_fast_error() -> None:
         get_branches_fast()
 
 
-def test_fetch_branch_metadata() -> None:
-    """Test that we can fetch branch metadata."""
-    # Get a real branch to test with
-    branches = get_branches_fast()
-    if not branches:
-        pytest.skip("No branches available for testing")
-
-    branch = branches[0]
-    updated_branch = fetch_branch_metadata(branch)
-
-    # Should return a BranchInfo with updated fields
-    assert isinstance(updated_branch, BranchInfo)
-    assert updated_branch.name == branch.name
-    assert updated_branch.creator_date == branch.creator_date
-    assert updated_branch.last_commit_message == branch.last_commit_message
-    assert updated_branch.is_loading is False
-
-
-def test_checkout_branch_error() -> None:
-    """Test that we handle errors when checking out a branch."""
-    mock_result = Mock()
-    mock_result.returncode = 1
-    mock_result.stderr = "error: pathspec 'nonexistent' did not match"
-
-    with (
-        patch("subprocess.run", return_value=mock_result),
-        pytest.raises(RuntimeError, match="Failed to checkout branch"),
-    ):
-        checkout_branch("nonexistent")
-
-
-def test_get_base_branch_with_upstream() -> None:
-    """Test detecting base branch when upstream is configured."""
-    # Mock the for-each-ref call to return upstream
-    mock_upstream = Mock()
-    mock_upstream.returncode = 0
-    mock_upstream.stdout = "origin/main"
-
-    # Mock the rev-parse call to verify local branch exists
-    mock_verify = Mock()
-    mock_verify.returncode = 0
-
-    with patch("subprocess.run", side_effect=[mock_upstream, mock_verify]):
-        base = get_base_branch("feature")
-        assert base == "main"
-
-
-def test_get_base_branch_common_ancestor() -> None:
-    """Test detecting base branch using common ancestor."""
-    # Mock no upstream
-    mock_no_upstream = Mock()
-    mock_no_upstream.returncode = 0
-    mock_no_upstream.stdout = ""
-
-    # Mock rev-parse to say 'main' exists
-    mock_main_exists = Mock()
-    mock_main_exists.returncode = 0
-
-    # Mock merge-base to say there's a common ancestor
-    mock_merge_base = Mock()
-    mock_merge_base.returncode = 0
-
-    with patch("subprocess.run", side_effect=[mock_no_upstream, mock_main_exists, mock_merge_base]):
-        base = get_base_branch("feature")
-        assert base == "main"
-
-
-def test_get_base_branch_none() -> None:
-    """Test that we return None when base branch cannot be determined."""
-    # Mock no upstream
-    mock_no_upstream = Mock()
-    mock_no_upstream.returncode = 0
-    mock_no_upstream.stdout = ""
-
-    # Mock that no common bases exist
-    mock_no_branch = Mock()
-    mock_no_branch.returncode = 1
-
-    with patch("subprocess.run", side_effect=[mock_no_upstream] + [mock_no_branch] * 4):
-        base = get_base_branch("orphan")
-        assert base is None
-
-
-def test_rebase_to_branch_error() -> None:
-    """Test that we handle errors when rebasing to a branch."""
-
-    class StubClient(SubprocessGitClient):
-        def get_base_branch(self, branch_name: str) -> str | None:
-            return "main"
-
-    mock_checkout = Mock()
-    mock_checkout.returncode = 0
-
-    mock_rebase = Mock()
-    mock_rebase.returncode = 1
-    mock_rebase.stderr = "fatal: conflict"
-
-    with (
-        patch("subprocess.run", side_effect=[mock_checkout, mock_rebase]),
-        pytest.raises(RuntimeError, match="Failed to rebase to main"),
-    ):
-        StubClient().rebase_to_branch("feature")
-
-
-def test_delete_branch_error() -> None:
-    """Test that we handle errors when deleting a branch."""
-    mock_result = Mock()
-    mock_result.returncode = 1
-    mock_result.stderr = "error: branch 'main' not found"
-
-    with (
-        patch("subprocess.run", return_value=mock_result),
-        pytest.raises(RuntimeError, match="Failed to delete branch"),
-    ):
-        delete_branch("main")
-
-
-def test_get_branches_fast_empty_output() -> None:
-    """Test that we handle empty git output."""
+def test_get_branches_fast_returns_empty_list_when_git_output_is_empty() -> None:
     mock_result = Mock()
     mock_result.returncode = 0
     mock_result.stdout = ""
@@ -248,21 +120,33 @@ def test_get_branches_fast_empty_output() -> None:
         assert branches == []
 
 
-def test_get_branches_fast_malformed_line() -> None:
-    """Test that we skip malformed lines in git output."""
+def test_get_branches_fast_skips_lines_that_lack_three_pipe_separated_parts() -> None:
     mock_result = Mock()
     mock_result.returncode = 0
     mock_result.stdout = "main|2025-01-01|Initial commit\ninvalid_line\n"
 
     with patch("subprocess.run", return_value=mock_result):
         branches = get_branches_fast()
-        # Should only get the valid branch
         assert len(branches) == 1
         assert branches[0].name == "main"
 
 
-def test_fetch_branch_metadata_no_upstream() -> None:
-    """Test fetching metadata for a branch with no upstream."""
+def test_fetch_branch_metadata_returns_branch_with_is_loading_false() -> None:
+    branches = get_branches_fast()
+    if not branches:
+        pytest.skip("No branches available for testing")
+
+    branch = branches[0]
+    updated_branch = fetch_branch_metadata(branch)
+
+    assert isinstance(updated_branch, BranchInfo)
+    assert updated_branch.name == branch.name
+    assert updated_branch.creator_date == branch.creator_date
+    assert updated_branch.last_commit_message == branch.last_commit_message
+    assert updated_branch.is_loading is False
+
+
+def test_fetch_branch_metadata_returns_no_upstream_when_for_each_ref_emits_only_separator() -> None:
     branch = BranchInfo(
         name="local-only",
         creator_date=datetime.now(),
@@ -281,20 +165,17 @@ def test_fetch_branch_metadata_no_upstream() -> None:
         assert updated.is_loading is False
 
 
-def test_fetch_branch_metadata_with_upstream() -> None:
-    """Test fetching metadata for a branch with upstream."""
+def test_fetch_branch_metadata_marks_branch_merged_when_merge_base_succeeds() -> None:
     branch = BranchInfo(
         name="feature",
         creator_date=datetime.now(),
         last_commit_message="Feature commit",
     )
 
-    # Mock the for-each-ref call
     mock_for_each_ref = Mock()
     mock_for_each_ref.returncode = 0
     mock_for_each_ref.stdout = "origin/feature|="
 
-    # Mock the merge-base call
     mock_merge_base = Mock()
     mock_merge_base.returncode = 0
 
@@ -306,20 +187,17 @@ def test_fetch_branch_metadata_with_upstream() -> None:
         assert updated.is_loading is False
 
 
-def test_fetch_branch_metadata_not_merged() -> None:
-    """Test fetching metadata for a branch not merged to upstream."""
+def test_fetch_branch_metadata_marks_branch_unmerged_when_merge_base_fails() -> None:
     branch = BranchInfo(
         name="feature",
         creator_date=datetime.now(),
         last_commit_message="Feature commit",
     )
 
-    # Mock the for-each-ref call
     mock_for_each_ref = Mock()
     mock_for_each_ref.returncode = 0
     mock_for_each_ref.stdout = "origin/feature|>"
 
-    # Mock the merge-base call (non-zero means not merged)
     mock_merge_base = Mock()
     mock_merge_base.returncode = 1
 
@@ -331,19 +209,88 @@ def test_fetch_branch_metadata_not_merged() -> None:
         assert updated.is_loading is False
 
 
-def test_checkout_branch_success() -> None:
-    """Test successful branch checkout."""
+def test_checkout_branch_completes_when_git_checkout_succeeds() -> None:
     mock_result = Mock()
     mock_result.returncode = 0
 
     with patch("subprocess.run", return_value=mock_result):
-        # Should not raise an exception
         checkout_branch("main")
 
 
-def test_rebase_to_branch_success() -> None:
-    """Test successful rebase to branch."""
+def test_checkout_branch_raises_when_git_checkout_fails() -> None:
+    mock_result = Mock()
+    mock_result.returncode = 1
+    mock_result.stderr = "error: pathspec 'nonexistent' did not match"
 
+    with (
+        patch("subprocess.run", return_value=mock_result),
+        pytest.raises(RuntimeError, match="Failed to checkout branch"),
+    ):
+        checkout_branch("nonexistent")
+
+
+def test_get_base_branch_returns_local_branch_matching_configured_upstream() -> None:
+    mock_upstream = Mock()
+    mock_upstream.returncode = 0
+    mock_upstream.stdout = "origin/main"
+
+    mock_verify = Mock()
+    mock_verify.returncode = 0
+
+    with patch("subprocess.run", side_effect=[mock_upstream, mock_verify]):
+        base = get_base_branch("feature")
+        assert base == "main"
+
+
+def test_get_base_branch_falls_back_to_main_when_upstream_is_unset() -> None:
+    mock_no_upstream = Mock()
+    mock_no_upstream.returncode = 0
+    mock_no_upstream.stdout = ""
+
+    mock_main_exists = Mock()
+    mock_main_exists.returncode = 0
+
+    mock_merge_base = Mock()
+    mock_merge_base.returncode = 0
+
+    with patch("subprocess.run", side_effect=[mock_no_upstream, mock_main_exists, mock_merge_base]):
+        base = get_base_branch("feature")
+        assert base == "main"
+
+
+def test_get_base_branch_returns_none_when_no_candidate_base_exists() -> None:
+    mock_no_upstream = Mock()
+    mock_no_upstream.returncode = 0
+    mock_no_upstream.stdout = ""
+
+    mock_no_branch = Mock()
+    mock_no_branch.returncode = 1
+
+    with patch("subprocess.run", side_effect=[mock_no_upstream] + [mock_no_branch] * 4):
+        base = get_base_branch("orphan")
+        assert base is None
+
+
+def test_rebase_to_branch_raises_when_git_rebase_fails() -> None:
+    class StubClient(SubprocessGitClient):
+        def get_base_branch(self, branch_name: str) -> str | None:
+            return "main"
+
+    mock_checkout = Mock()
+    mock_checkout.returncode = 0
+
+    mock_rebase = Mock()
+    mock_rebase.returncode = 1
+    mock_rebase.stderr = "fatal: conflict"
+
+    with (
+        patch("subprocess.run", side_effect=[mock_checkout, mock_rebase]),
+        pytest.raises(RuntimeError, match="Failed to rebase to main"),
+    ):
+        StubClient().rebase_to_branch("feature")
+
+
+def test_rebase_to_branch_completes_when_checkout_and_rebase_succeed() -> None:
     class StubClient(SubprocessGitClient):
         def get_base_branch(self, branch_name: str) -> str | None:
             return "main"
@@ -352,13 +299,10 @@ def test_rebase_to_branch_success() -> None:
     mock_success.returncode = 0
 
     with patch("subprocess.run", side_effect=[mock_success, mock_success]):
-        # Should not raise an exception
         StubClient().rebase_to_branch("feature")
 
 
-def test_rebase_to_branch_no_base() -> None:
-    """Test that we handle the case when base branch cannot be determined."""
-
+def test_rebase_to_branch_raises_when_base_branch_cannot_be_determined() -> None:
     class StubClient(SubprocessGitClient):
         def get_base_branch(self, branch_name: str) -> str | None:
             return None
@@ -367,8 +311,7 @@ def test_rebase_to_branch_no_base() -> None:
         StubClient().rebase_to_branch("orphan")
 
 
-def test_delete_branch_success() -> None:
-    """Test successful branch deletion."""
+def test_delete_branch_completes_when_git_branch_delete_succeeds() -> None:
     mock_current = Mock()
     mock_current.returncode = 0
     mock_current.stdout = "main"
@@ -377,13 +320,22 @@ def test_delete_branch_success() -> None:
     mock_delete.returncode = 0
 
     with patch("subprocess.run", side_effect=[mock_current, mock_delete]):
-        # Should not raise an exception
         delete_branch("feature")
 
 
-def test_delete_current_branch() -> None:
-    """Test that we cannot delete the current branch."""
+def test_delete_branch_raises_when_git_branch_delete_fails() -> None:
+    mock_result = Mock()
+    mock_result.returncode = 1
+    mock_result.stderr = "error: branch 'main' not found"
 
+    with (
+        patch("subprocess.run", return_value=mock_result),
+        pytest.raises(RuntimeError, match="Failed to delete branch"),
+    ):
+        delete_branch("main")
+
+
+def test_delete_branch_refuses_to_delete_the_currently_checked_out_branch() -> None:
     class StubClient(SubprocessGitClient):
         def get_current_branch(self) -> str:
             return "main"
@@ -392,31 +344,25 @@ def test_delete_current_branch() -> None:
         StubClient().delete_branch("main")
 
 
-def test_create_branch_success() -> None:
-    """Test successful branch creation without checkout."""
-    # Mock successful branch creation
+def test_create_branch_completes_when_git_branch_create_succeeds() -> None:
     mock_create = Mock()
     mock_create.returncode = 0
 
     with patch("subprocess.run", return_value=mock_create):
-        # Should not raise an exception
         create_branch("main", "new-feature")
 
 
-def test_create_branch_empty_name() -> None:
-    """Test that we handle empty branch names."""
+def test_create_branch_raises_when_new_name_is_empty() -> None:
     with pytest.raises(RuntimeError, match="Branch name cannot be empty"):
         create_branch("main", "")
 
 
-def test_create_branch_whitespace_name() -> None:
-    """Test that we handle whitespace-only branch names."""
+def test_create_branch_raises_when_new_name_is_whitespace_only() -> None:
     with pytest.raises(RuntimeError, match="Branch name cannot be empty"):
         create_branch("main", "   ")
 
 
-def test_create_branch_creation_error() -> None:
-    """Test that we handle errors when creating a branch."""
+def test_create_branch_raises_when_git_branch_create_fails() -> None:
     mock_result = Mock()
     mock_result.returncode = 1
     mock_result.stderr = "fatal: branch already exists"
