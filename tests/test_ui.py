@@ -58,14 +58,16 @@ def test_branch_list_falls_back_to_empty_current_branch_when_get_current_branch_
         assert branch_list.current_branch == ""
 
 
-def test_format_branch_name_marks_current_branch() -> None:
+def test_format_branch_name_marks_current_branch_with_star_prefix() -> None:
     result = format_branch_name("main", is_current=True)
+
     assert isinstance(result, Text)
     assert result.plain == "* main"
 
 
-def test_format_branch_name_returns_plain_name_for_other_branches() -> None:
+def test_format_branch_name_returns_plain_string_for_non_current_branches() -> None:
     result = format_branch_name("feature", is_current=False)
+
     assert result == "feature"
 
 
@@ -241,29 +243,21 @@ def test_action_checkout_shows_error_status_and_skips_refresh_on_checkout_failur
     app.refresh_branches.assert_not_called()
 
 
-def test_action_checkout_is_noop_for_negative_cursor(
-    sample_branches: list[BranchInfo],
+@pytest.mark.parametrize(
+    "cursor_row",
+    [
+        pytest.param(-1, id="negative cursor"),
+        pytest.param(99, id="cursor past end"),
+    ],
+)
+def test_action_checkout_is_noop_when_cursor_is_out_of_range(
+    sample_branches: list[BranchInfo], cursor_row: int
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
     mock_branch_list = Mock()
-    mock_branch_list.cursor_row = -1
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-
-    app.action_checkout()
-
-    assert client.checkout_calls == []
-
-
-def test_action_checkout_is_noop_when_cursor_past_end(
-    sample_branches: list[BranchInfo],
-) -> None:
-    client = FakeGitClient(branches=sample_branches)
-    app = HopApp(sample_branches, client=client)
-
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 99
+    mock_branch_list.cursor_row = cursor_row
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
 
     app.action_checkout()
@@ -664,30 +658,27 @@ def test_help_screen_close_button_dismisses_the_screen() -> None:
     screen.dismiss.assert_called_once()
 
 
-def test_confirm_delete_screen_confirm_button_dismisses_with_true() -> None:
+@pytest.mark.parametrize(
+    "button_id,expected_value",
+    [
+        pytest.param("confirm", True, id="confirm button -> True"),
+        pytest.param("cancel", False, id="cancel button -> False"),
+    ],
+)
+def test_confirm_delete_screen_button_dismisses_with_corresponding_value(
+    button_id: str, expected_value: bool
+) -> None:
     screen = ConfirmDeleteScreen("test-branch", "=", True)
     screen.dismiss = Mock()  # type: ignore[method-assign]
 
     mock_button = Mock()
-    mock_button.id = "confirm"
+    mock_button.id = button_id
     mock_event = Mock()
     mock_event.button = mock_button
 
     screen.on_button_pressed(mock_event)
-    screen.dismiss.assert_called_once_with(True)
 
-
-def test_confirm_delete_screen_cancel_button_dismisses_with_false() -> None:
-    screen = ConfirmDeleteScreen("test-branch", "=", True)
-    screen.dismiss = Mock()  # type: ignore[method-assign]
-
-    mock_button = Mock()
-    mock_button.id = "cancel"
-    mock_event = Mock()
-    mock_event.button = mock_button
-
-    screen.on_button_pressed(mock_event)
-    screen.dismiss.assert_called_once_with(False)
+    screen.dismiss.assert_called_once_with(expected_value)
 
 
 def test_branch_name_input_create_button_dismisses_with_entered_name() -> None:
@@ -775,32 +766,23 @@ def _status_branch(track_status: str) -> BranchInfo:
     )
 
 
-def test_format_status_for_behind_branch_renders_yellow_marker() -> None:
-    status = format_status(_status_branch("<"))
+@pytest.mark.parametrize(
+    "track_status,expected_plain,expected_style",
+    [
+        pytest.param("<", "<", "bright_yellow", id="behind"),
+        pytest.param(">", ">", "bright_cyan", id="ahead"),
+        pytest.param("<>", "<>", "bright_red", id="diverged"),
+        pytest.param("", "  ", "dim white", id="no upstream"),
+    ],
+)
+def test_format_status_renders_track_status_with_expected_color(
+    track_status: str, expected_plain: str, expected_style: str
+) -> None:
+    status = format_status(_status_branch(track_status))
+
     assert isinstance(status, Text)
-    assert status.plain == "<"
-    assert str(status.style) == "bright_yellow"
-
-
-def test_format_status_for_ahead_branch_renders_cyan_marker() -> None:
-    status = format_status(_status_branch(">"))
-    assert isinstance(status, Text)
-    assert status.plain == ">"
-    assert str(status.style) == "bright_cyan"
-
-
-def test_format_status_for_diverged_branch_renders_red_marker() -> None:
-    status = format_status(_status_branch("<>"))
-    assert isinstance(status, Text)
-    assert status.plain == "<>"
-    assert str(status.style) == "bright_red"
-
-
-def test_format_status_for_branch_without_upstream_renders_dim_blank() -> None:
-    status = format_status(_status_branch(""))
-    assert isinstance(status, Text)
-    assert status.plain == "  "
-    assert str(status.style) == "dim white"
+    assert status.plain == expected_plain
+    assert str(status.style) == expected_style
 
 
 def test_remove_branch_is_noop_for_out_of_range_indices() -> None:

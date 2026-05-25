@@ -352,14 +352,16 @@ def test_create_branch_completes_when_git_branch_create_succeeds() -> None:
         create_branch("main", "new-feature")
 
 
-def test_create_branch_raises_when_new_name_is_empty() -> None:
+@pytest.mark.parametrize(
+    "new_name",
+    [
+        pytest.param("", id="empty string"),
+        pytest.param("   ", id="whitespace only"),
+    ],
+)
+def test_create_branch_raises_when_new_name_is_blank(new_name: str) -> None:
     with pytest.raises(RuntimeError, match="Branch name cannot be empty"):
-        create_branch("main", "")
-
-
-def test_create_branch_raises_when_new_name_is_whitespace_only() -> None:
-    with pytest.raises(RuntimeError, match="Branch name cannot be empty"):
-        create_branch("main", "   ")
+        create_branch("main", new_name)
 
 
 def test_create_branch_raises_when_git_branch_create_fails() -> None:
