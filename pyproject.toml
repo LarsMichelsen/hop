@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "hop"
 version = "0.1.0"
-description = "Git branch management tool for quick branch hopping"
+description = "Helper for quick git branch hopping."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -23,6 +23,7 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+asyncio_mode = "auto"
 addopts = "--cov=hop --cov-report=term-missing --cov-report=term:skip-covered --cov-fail-under=75"
 
 [tool.coverage.run]
@@ -73,6 +74,7 @@ dev = [
     "basedpyright>=1.33.0",
     "prek>=0.4.1",
     "pytest>=8.4.2",
+    "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
     "ruff>=0.14.4",
 ]

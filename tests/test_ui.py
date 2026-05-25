@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from rich.text import Text
-from textual.widgets import Static
+from textual.widgets import Label, Static
 
 from hop.git import BranchInfo
 from hop.ui import (
@@ -21,33 +21,44 @@ from hop.ui import (
 from tests.fakes import FakeGitClient
 
 
+def _branch(
+    name: str,
+    *,
+    creator_date: datetime = datetime(2025, 1, 1),
+    last_commit_message: str = "commit",
+    upstream: str | None = None,
+    track_status: str = "",
+    is_merged: bool = False,
+    is_loading: bool = False,
+) -> BranchInfo:
+    return BranchInfo(
+        name=name,
+        creator_date=creator_date,
+        last_commit_message=last_commit_message,
+        upstream=upstream,
+        track_status=track_status,
+        is_merged=is_merged,
+        is_loading=is_loading,
+    )
+
+
 @pytest.fixture
 def sample_branches() -> list[BranchInfo]:
-    """Create sample branches for testing."""
     return [
-        BranchInfo(
-            name="main",
-            creator_date=datetime(2025, 1, 1),
-            last_commit_message="Initial commit",
-        ),
-        BranchInfo(
-            name="feature",
+        _branch("main", last_commit_message="Initial commit"),
+        _branch(
+            "feature",
             creator_date=datetime(2025, 1, 2),
             last_commit_message="Add feature",
             upstream="origin/feature",
             track_status="=",
-            is_loading=False,
         ),
     ]
 
 
-def test_branch_list_falls_back_to_empty_current_branch_when_get_current_branch_raises(
-    sample_branches: list[BranchInfo],
-) -> None:
-    with patch("hop.ui.get_current_branch", side_effect=RuntimeError("Not in a repo")):
-        branch_list = BranchList(sample_branches)
-        assert branch_list.branches == sample_branches
-        assert branch_list.current_branch == ""
+# ---------------------------------------------------------------------------
+# Pure helpers
+# ---------------------------------------------------------------------------
 
 
 def test_format_branch_name_marks_current_branch_with_star_prefix() -> None:
@@ -63,467 +74,682 @@ def test_format_branch_name_returns_plain_string_for_non_current_branches() -> N
     assert result == "feature"
 
 
-def test_update_branch_replaces_entry_and_redraws_all_four_cells(
+@pytest.mark.parametrize(
+    "track_status,expected_plain,expected_style",
+    [
+        pytest.param("=", "=", "bright_green", id="synced"),
+        pytest.param("<", "<", "bright_yellow", id="behind"),
+        pytest.param(">", ">", "bright_cyan", id="ahead"),
+        pytest.param("<>", "<>", "bright_red", id="diverged"),
+        pytest.param("", "  ", "dim white", id="no upstream"),
+    ],
+)
+def test_format_status_renders_track_status_with_expected_color(
+    track_status: str, expected_plain: str, expected_style: str
+) -> None:
+    branch = _branch("x", track_status=track_status)
+
+    status = format_status(branch)
+
+    assert isinstance(status, Text)
+    assert status.plain == expected_plain
+    assert str(status.style) == expected_style
+
+
+def test_format_status_renders_loading_marker_in_dim_white() -> None:
+    branch = _branch("x", is_loading=True)
+
+    status = format_status(branch)
+
+    assert status.plain == "--"
+    assert str(status.style) == "dim white"
+
+
+# ---------------------------------------------------------------------------
+# BranchList widget
+# ---------------------------------------------------------------------------
+
+
+def test_branch_list_falls_back_to_empty_current_branch_when_get_current_branch_raises(
     sample_branches: list[BranchInfo],
 ) -> None:
-    with patch("hop.ui.get_current_branch", return_value="main"):
+    with patch("hop.ui.get_current_branch", side_effect=RuntimeError("Not in a repo")):
         branch_list = BranchList(sample_branches)
-        branch_list.update_cell_at = Mock()  # type: ignore[method-assign]
 
-        updated_branch = BranchInfo(
-            name="main",
-            creator_date=datetime(2025, 1, 1),
-            last_commit_message="Updated commit",
+    assert branch_list.branches == sample_branches
+    assert branch_list.current_branch == ""
+
+
+async def test_update_branch_replaces_branch_entry_in_internal_list(
+    sample_branches: list[BranchInfo],
+) -> None:
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        branch_list = app.query_one(BranchList)
+
+        updated = _branch(
+            "main",
+            last_commit_message="Updated message",
             upstream="origin/main",
             track_status="<",
-            is_loading=False,
         )
+        branch_list.update_branch(updated, 0)
 
-        branch_list.update_branch(updated_branch, 0)
-
-        # Should update the branch in the list
-        assert branch_list.branches[0] == updated_branch
-
-        # Should update cells
-        assert branch_list.update_cell_at.call_count == 4
+        assert branch_list.branches[0] == updated
 
 
-def test_update_branch_does_nothing_when_index_is_out_of_range(
+async def test_update_branch_is_noop_when_index_is_out_of_range(
     sample_branches: list[BranchInfo],
 ) -> None:
-    with patch("hop.ui.get_current_branch", return_value="main"):
-        branch_list = BranchList(sample_branches)
-        branch_list.update_cell_at = Mock()  # type: ignore[method-assign]
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
 
-        updated_branch = BranchInfo(
-            name="test",
-            creator_date=datetime(2025, 1, 1),
-            last_commit_message="Test",
-        )
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        branch_list = app.query_one(BranchList)
+        before = list(branch_list.branches)
 
-        # Should not crash
-        branch_list.update_branch(updated_branch, 99)
+        branch_list.update_branch(_branch("ghost"), 99)
 
-        # Should not update any cells
-        branch_list.update_cell_at.assert_not_called()
+        assert branch_list.branches == before
 
 
-def test_show_status_writes_message_into_status_widget(
+async def test_remove_branch_is_noop_for_out_of_range_indices(
     sample_branches: list[BranchInfo],
 ) -> None:
-    app = HopApp(sample_branches)
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
 
-    # Mock query_one to return a mock Static widget
-    mock_static = Mock()
-    app.query_one = Mock(return_value=mock_static)  # type: ignore[method-assign]
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        branch_list = app.query_one(BranchList)
+        before = list(branch_list.branches)
 
-    app.show_status("Test message")
+        branch_list.remove_branch(-1)
+        branch_list.remove_branch(99)
 
-    # Should query for status widget and update it
-    app.query_one.assert_called_once_with("#status", Static)
-    mock_static.update.assert_called_once_with("Test message")
-
-
-def test_action_cursor_down_forwards_to_branch_list(
-    sample_branches: list[BranchInfo],
-) -> None:
-    app = HopApp(sample_branches)
-
-    # Mock query_one to return a mock BranchList
-    mock_branch_list = Mock()
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-
-    app.action_cursor_down()
-
-    # Should call action_cursor_down on BranchList
-    mock_branch_list.action_cursor_down.assert_called_once()
+        assert branch_list.branches == before
 
 
-def test_action_cursor_up_forwards_to_branch_list(
-    sample_branches: list[BranchInfo],
-) -> None:
-    app = HopApp(sample_branches)
-
-    # Mock query_one to return a mock BranchList
-    mock_branch_list = Mock()
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-
-    app.action_cursor_up()
-
-    # Should call action_cursor_up on BranchList
-    mock_branch_list.action_cursor_up.assert_called_once()
+# ---------------------------------------------------------------------------
+# Cursor / keyboard navigation
+# ---------------------------------------------------------------------------
 
 
-def test_action_checkout_invokes_client_and_refreshes(
+async def test_pressing_j_moves_cursor_down(sample_branches: list[BranchInfo]) -> None:
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.query_one(BranchList).cursor_row == 0
+
+        await pilot.press("j")
+
+        assert app.query_one(BranchList).cursor_row == 1
+
+
+async def test_pressing_k_moves_cursor_up(sample_branches: list[BranchInfo]) -> None:
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")
+        assert app.query_one(BranchList).cursor_row == 1
+
+        await pilot.press("k")
+
+        assert app.query_one(BranchList).cursor_row == 0
+
+
+# ---------------------------------------------------------------------------
+# Checkout (c)
+# ---------------------------------------------------------------------------
+
+
+async def test_pressing_c_checks_out_selected_branch_and_updates_status(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 0
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.refresh_branches = Mock()  # type: ignore[method-assign]
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")  # select "feature"
+        await pilot.press("c")
+        await pilot.pause()
 
-    app.action_checkout()
+        assert client.checkout_calls == ["feature"]
+        status = app.query_one("#status", Static)
+        assert "Checked out branch: feature" in str(status.content)
 
-    assert client.checkout_calls == [sample_branches[0].name]
-    app.refresh_branches.assert_called_once()
 
-
-def test_action_checkout_shows_error_status_and_skips_refresh_on_checkout_failure(
+async def test_pressing_c_shows_error_status_when_checkout_fails(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     client.checkout_error = RuntimeError("Checkout failed")
     app = HopApp(sample_branches, client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 0
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.show_status = Mock()  # type: ignore[method-assign]
-    app.refresh_branches = Mock()  # type: ignore[method-assign]
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
 
-    app.action_checkout()
-
-    app.show_status.assert_called_once_with("Error: Checkout failed")
-    app.refresh_branches.assert_not_called()
+        status = app.query_one("#status", Static)
+        assert "Error: Checkout failed" in str(status.content)
 
 
-@pytest.mark.parametrize(
-    "cursor_row",
-    [
-        pytest.param(-1, id="negative cursor"),
-        pytest.param(99, id="cursor past end"),
-    ],
-)
-def test_action_checkout_is_noop_when_cursor_is_out_of_range(
-    sample_branches: list[BranchInfo], cursor_row: int
-) -> None:
-    client = FakeGitClient(branches=sample_branches)
-    app = HopApp(sample_branches, client=client)
+async def test_pressing_c_on_empty_branch_list_is_a_noop() -> None:
+    client = FakeGitClient(branches=[])
+    app = HopApp([], client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = cursor_row
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    async with app.run_test() as pilot:
+        await pilot.press("c")
+        await pilot.pause()
 
-    app.action_checkout()
-
-    assert client.checkout_calls == []
+        assert client.checkout_calls == []
 
 
-def test_action_rebase_invokes_client_and_refreshes(
+# ---------------------------------------------------------------------------
+# Rebase (r)
+# ---------------------------------------------------------------------------
+
+
+async def test_pressing_r_rebases_selected_branch_and_updates_status(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 1
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.refresh_branches = Mock()  # type: ignore[method-assign]
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")
+        await pilot.press("r")
+        await pilot.pause()
 
-    app.action_rebase()
+        assert client.rebase_calls == ["feature"]
+        status = app.query_one("#status", Static)
+        assert "Rebased to branch: feature" in str(status.content)
 
-    assert client.rebase_calls == [sample_branches[1].name]
-    app.refresh_branches.assert_called_once()
 
-
-def test_action_rebase_shows_error_status_and_skips_refresh_on_rebase_failure(
+async def test_pressing_r_shows_error_status_when_rebase_fails(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     client.rebase_error = RuntimeError("Rebase failed")
     app = HopApp(sample_branches, client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 1
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.show_status = Mock()  # type: ignore[method-assign]
-    app.refresh_branches = Mock()  # type: ignore[method-assign]
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause()
 
-    app.action_rebase()
-
-    app.show_status.assert_called_once_with("Error: Rebase failed")
-    app.refresh_branches.assert_not_called()
+        status = app.query_one("#status", Static)
+        assert "Error: Rebase failed" in str(status.content)
 
 
-def test_action_rebase_is_noop_for_negative_cursor(
+async def test_pressing_r_on_empty_branch_list_is_a_noop() -> None:
+    client = FakeGitClient(branches=[])
+    app = HopApp([], client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.press("r")
+        await pilot.pause()
+
+        assert client.rebase_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Delete (d)
+# ---------------------------------------------------------------------------
+
+
+async def test_pressing_d_deletes_synced_branch_without_confirmation_screen(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = -5
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")  # select "feature" (track_status="=")
+        await pilot.press("d")
+        await pilot.pause()
 
-    app.action_rebase()
+        assert client.delete_calls == ["feature"]
+        assert not isinstance(app.screen, ConfirmDeleteScreen)
+        assert [b.name for b in app.query_one(BranchList).branches] == ["main"]
 
-    assert client.rebase_calls == []
 
-
-def test_action_delete_deletes_synced_branch_without_confirmation_prompt(
+async def test_pressing_d_on_diverged_branch_opens_confirmation_screen(
     sample_branches: list[BranchInfo],
 ) -> None:
-    # Create a branch that's synced with upstream (track_status == "=")
-    synced_branch = BranchInfo(
-        name="feature",
-        creator_date=sample_branches[1].creator_date,
-        last_commit_message="Add feature",
+    diverged = _branch(
+        "feature",
+        creator_date=datetime(2025, 1, 2),
         upstream="origin/feature",
-        track_status="=",
-        is_loading=False,
+        track_status="<>",
     )
-    branches = [sample_branches[0], synced_branch]
+    branches = [sample_branches[0], diverged]
     client = FakeGitClient(branches=branches)
     app = HopApp(branches, client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 1
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")
+        await pilot.press("d")
+        await pilot.pause()
 
-    def remove_side_effect(idx: int) -> None:
-        branches.pop(idx)
-
-    mock_branch_list.remove_branch = Mock(side_effect=remove_side_effect)
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.show_status = Mock()  # type: ignore[method-assign]
-
-    app.action_delete()
-
-    assert client.delete_calls == ["feature"]
-    mock_branch_list.remove_branch.assert_called_once_with(1)
-    app.show_status.assert_called_once()
-    assert len(app.branches) == 1
+        assert isinstance(app.screen, ConfirmDeleteScreen)
+        assert app.screen.branch_name == "feature"
+        assert client.delete_calls == []
 
 
-def test_action_delete_shows_confirmation_screen_for_ahead_branch(
+async def test_clicking_confirm_in_delete_dialog_deletes_branch(
     sample_branches: list[BranchInfo],
 ) -> None:
-    # Create a branch that's ahead of upstream (track_status == ">")
-    ahead_branch = BranchInfo(
-        name="feature",
-        creator_date=sample_branches[1].creator_date,
-        last_commit_message="Add feature",
+    ahead = _branch(
+        "feature",
+        creator_date=datetime(2025, 1, 2),
         upstream="origin/feature",
         track_status=">",
-        is_loading=False,
     )
-    branches = [sample_branches[0], ahead_branch]
-    app = HopApp(branches)
-
-    # Mock query_one to return a mock BranchList
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 1
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.push_screen = Mock()  # type: ignore[method-assign]
-
-    app.action_delete()
-
-    # Should show confirmation dialog (not delete immediately)
-    app.push_screen.assert_called_once()
-
-
-def test_action_delete_shows_error_status_and_keeps_branch_on_delete_failure(
-    sample_branches: list[BranchInfo],
-) -> None:
-    synced_branch = BranchInfo(
-        name="feature",
-        creator_date=sample_branches[1].creator_date,
-        last_commit_message="Add feature",
-        upstream="origin/feature",
-        track_status="=",
-        is_loading=False,
-    )
-    branches = [sample_branches[0], synced_branch]
+    branches = [sample_branches[0], ahead]
     client = FakeGitClient(branches=branches)
-    client.delete_error = RuntimeError("Delete failed")
     app = HopApp(branches, client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 1
-    mock_branch_list.remove_branch = Mock()
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.show_status = Mock()  # type: ignore[method-assign]
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")
+        await pilot.press("d")
+        await pilot.pause()
+        await pilot.click("#confirm")
+        await pilot.pause()
 
-    app.action_delete()
-
-    app.show_status.assert_called_once_with("Error: Delete failed")
-    mock_branch_list.remove_branch.assert_not_called()
-    assert len(app.branches) == 2
+        assert client.delete_calls == ["feature"]
+        assert [b.name for b in app.query_one(BranchList).branches] == ["main"]
 
 
-def test_action_delete_is_noop_when_cursor_past_end(
+async def test_clicking_cancel_in_delete_dialog_keeps_branch(
+    sample_branches: list[BranchInfo],
+) -> None:
+    ahead = _branch(
+        "feature",
+        creator_date=datetime(2025, 1, 2),
+        upstream="origin/feature",
+        track_status=">",
+    )
+    branches = [sample_branches[0], ahead]
+    client = FakeGitClient(branches=branches)
+    app = HopApp(branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")
+        await pilot.press("d")
+        await pilot.pause()
+        await pilot.click("#cancel")
+        await pilot.pause()
+
+        assert client.delete_calls == []
+        assert [b.name for b in app.query_one(BranchList).branches] == ["main", "feature"]
+
+
+async def test_pressing_d_shows_error_status_when_delete_fails(
+    sample_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=sample_branches)
+    client.delete_error = RuntimeError("Delete failed")
+    app = HopApp(sample_branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")  # select synced "feature" -> straight delete attempt
+        await pilot.press("d")
+        await pilot.pause()
+
+        status = app.query_one("#status", Static)
+        assert "Error: Delete failed" in str(status.content)
+        assert [b.name for b in app.query_one(BranchList).branches] == ["main", "feature"]
+
+
+async def test_pressing_d_on_empty_branch_list_is_a_noop() -> None:
+    client = FakeGitClient(branches=[])
+    app = HopApp([], client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.press("d")
+        await pilot.pause()
+
+        assert client.delete_calls == []
+        assert not isinstance(app.screen, ConfirmDeleteScreen)
+
+
+@pytest.mark.parametrize(
+    "track_status,is_merged,expected_phrase",
+    [
+        pytest.param("<>", False, "diverged", id="not merged + diverged"),
+        pytest.param(">", False, "unpushed commits that will be lost", id="not merged + ahead"),
+        pytest.param("", False, "no upstream configured", id="not merged + no upstream"),
+        pytest.param("<", False, "NOT fully merged", id="not merged + behind"),
+        pytest.param(">", True, "unpushed commits (but is merged", id="merged + ahead"),
+        pytest.param("<", True, "behind upstream", id="merged + behind"),
+        pytest.param("<>", True, "diverged", id="merged + diverged"),
+        pytest.param("", True, "no upstream configured", id="merged + no upstream"),
+    ],
+)
+async def test_confirm_delete_screen_warns_about_branch_state(
+    track_status: str, is_merged: bool, expected_phrase: str
+) -> None:
+    app = HopApp([], client=FakeGitClient(branches=[]))
+
+    async with app.run_test() as pilot:
+        app.push_screen(ConfirmDeleteScreen("feature", track_status, is_merged))
+        await pilot.pause()
+
+        assert isinstance(app.screen, ConfirmDeleteScreen)
+        label = app.screen.query_one("#confirm-message", Label)
+        assert expected_phrase in str(label.content)
+
+
+# ---------------------------------------------------------------------------
+# New branch (n)
+# ---------------------------------------------------------------------------
+
+
+async def test_pressing_n_opens_branch_name_input_with_source_branch(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
-
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 100
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.push_screen = Mock()  # type: ignore[method-assign]
-
-    app.action_delete()
-
-    assert client.delete_calls == []
-    app.push_screen.assert_not_called()
-
-
-def test_action_new_branch_pushes_input_screen_with_source_branch_name(
-    sample_branches: list[BranchInfo],
-) -> None:
-    app = HopApp(sample_branches)
-
-    # Mock query_one to return a mock BranchList
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 0
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.push_screen = Mock()  # type: ignore[method-assign]
 
     with patch("hop.ui.load_config") as mock_config:
         mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
-        app.action_new_branch()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
 
-        # Should show input dialog
-        app.push_screen.assert_called_once()
-        # Verify it's calling BranchNameInputScreen with correct source branch
-        args, _ = app.push_screen.call_args
-        assert args[0].source_branch == sample_branches[0].name
-
-
-def test_action_new_branch_is_noop_for_negative_cursor(
-    sample_branches: list[BranchInfo],
-) -> None:
-    app = HopApp(sample_branches)
-
-    # Mock query_one to return a mock BranchList with invalid cursor
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = -1
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.push_screen = Mock()  # type: ignore[method-assign]
-
-    app.action_new_branch()
-
-    # Should not show input dialog
-    app.push_screen.assert_not_called()
+            assert isinstance(app.screen, BranchNameInputScreen)
+            assert app.screen.source_branch == "main"
+            assert app.screen.prefix == ""
 
 
-def test_handle_new_branch_input_creates_then_checks_out_and_refreshes(
+async def test_pressing_n_uses_configured_prefix_for_source_branch(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 0
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.show_status = Mock()  # type: ignore[method-assign]
-    app.refresh_branches = Mock()  # type: ignore[method-assign]
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(
+            branch_prefixes={"main": "feature/"}, default_branch_prefix=""
+        )
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
 
-    app.handle_new_branch_input("new-feature")
-
-    assert client.create_calls == [(sample_branches[0].name, "new-feature")]
-    assert client.checkout_calls == ["new-feature"]
-    app.show_status.assert_called_once()
-    app.refresh_branches.assert_called_once_with(focus_branch_name="new-feature")
+            assert isinstance(app.screen, BranchNameInputScreen)
+            assert app.screen.prefix == "feature/"
 
 
-def test_handle_new_branch_input_does_nothing_when_input_is_none(
+async def test_pressing_n_uses_default_prefix_when_branch_has_no_configured_prefix(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 0
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.show_status = Mock()  # type: ignore[method-assign]
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(
+            branch_prefixes={"main": "feature/"}, default_branch_prefix="hotfix/"
+        )
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("j")  # select "feature"
+            await pilot.press("n")
+            await pilot.pause()
 
-    app.handle_new_branch_input(None)
+            assert isinstance(app.screen, BranchNameInputScreen)
+            assert app.screen.source_branch == "feature"
+            assert app.screen.prefix == "hotfix/"
 
-    assert client.create_calls == []
-    app.show_status.assert_not_called()
+
+async def test_pressing_enter_in_new_branch_dialog_creates_and_checks_out_branch(
+    sample_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=sample_branches)
+    app = HopApp(sample_branches, client=client)
+
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            for ch in "new-feature":
+                await pilot.press(ch)
+            await pilot.press("enter")
+            await pilot.pause()
+
+            assert client.create_calls == [("main", "new-feature")]
+            assert client.checkout_calls == ["new-feature"]
 
 
-def test_handle_new_branch_input_shows_error_and_skips_checkout_on_create_failure(
+async def test_clicking_create_in_new_branch_dialog_creates_branch(
+    sample_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=sample_branches)
+    app = HopApp(sample_branches, client=client)
+
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            for ch in "hotpatch":
+                await pilot.press(ch)
+            await pilot.click("#create")
+            await pilot.pause()
+
+            assert client.create_calls == [("main", "hotpatch")]
+
+
+async def test_clicking_cancel_in_new_branch_dialog_creates_no_branch(
+    sample_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=sample_branches)
+    app = HopApp(sample_branches, client=client)
+
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            await pilot.click("#cancel")
+            await pilot.pause()
+
+            assert client.create_calls == []
+            assert not isinstance(app.screen, BranchNameInputScreen)
+
+
+async def test_create_failure_shows_error_status_and_skips_checkout(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     client.create_error = RuntimeError("Branch already exists")
     app = HopApp(sample_branches, client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 0
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.show_status = Mock()  # type: ignore[method-assign]
-    app.refresh_branches = Mock()  # type: ignore[method-assign]
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            for ch in "dupe":
+                await pilot.press(ch)
+            await pilot.press("enter")
+            await pilot.pause()
 
-    app.handle_new_branch_input("existing-branch")
-
-    app.show_status.assert_called_once_with("Error: Branch already exists")
-    assert client.checkout_calls == []
-    app.refresh_branches.assert_not_called()
+            assert client.checkout_calls == []
+            status = app.query_one("#status", Static)
+            assert "Error: Branch already exists" in str(status.content)
 
 
-def test_handle_new_branch_input_shows_error_when_checkout_fails_after_create(
+async def test_checkout_failure_after_create_surfaces_error_in_status(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     client.checkout_error = RuntimeError("Checkout failed")
     app = HopApp(sample_branches, client=client)
 
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 0
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.show_status = Mock()  # type: ignore[method-assign]
-    app.refresh_branches = Mock()  # type: ignore[method-assign]
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            for ch in "newone":
+                await pilot.press(ch)
+            await pilot.press("enter")
+            await pilot.pause()
 
-    app.handle_new_branch_input("new-feature")
-
-    assert len(client.create_calls) == 1
-    app.show_status.assert_called_once_with("Error: Checkout failed")
-    app.refresh_branches.assert_not_called()
+            assert client.create_calls == [("main", "newone")]
+            status = app.query_one("#status", Static)
+            assert "Error: Checkout failed" in str(status.content)
 
 
-def test_refresh_branches_remounts_branch_list_with_updated_branches(
+async def test_pressing_n_on_empty_branch_list_is_a_noop() -> None:
+    client = FakeGitClient(branches=[])
+    app = HopApp([], client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.press("n")
+        await pilot.pause()
+
+        assert not isinstance(app.screen, BranchNameInputScreen)
+        assert client.create_calls == []
+
+
+async def test_blank_input_in_new_branch_dialog_keeps_dialog_open(
     sample_branches: list[BranchInfo],
 ) -> None:
-    new_branch = BranchInfo(
-        name="new-feature",
-        creator_date=sample_branches[0].creator_date,
-        last_commit_message="New feature",
-    )
-    updated_branches = sample_branches + [new_branch]
-
-    client = FakeGitClient(branches=updated_branches)
+    client = FakeGitClient(branches=sample_branches)
     app = HopApp(sample_branches, client=client)
 
-    mock_old_branch_list = Mock()
-    mock_old_branch_list.remove = Mock()
-    mock_old_branch_list.cursor_row = 1
-    mock_old_branch_list.focus = Mock()
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            await pilot.press("enter")  # submit empty
+            await pilot.pause()
 
-    app.query_one = Mock(return_value=mock_old_branch_list)  # type: ignore[method-assign]
-    app.mount = Mock()  # type: ignore[method-assign]
-    app.load_metadata = Mock()  # type: ignore[method-assign]
-    app.show_status = Mock()  # type: ignore[method-assign]
+            assert isinstance(app.screen, BranchNameInputScreen)
+            assert client.create_calls == []
 
-    mock_worker = Mock()
-    app.metadata_workers = [mock_worker]
 
-    mock_new_branch_list = Mock()
-    mock_new_branch_list.focus = Mock()
+async def test_clicking_create_with_blank_input_keeps_dialog_open(
+    sample_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=sample_branches)
+    app = HopApp(sample_branches, client=client)
 
-    with patch("hop.ui.BranchList", return_value=mock_new_branch_list):
-        app.refresh_branches()
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("n")
+            await pilot.pause()
+            await pilot.click("#create")
+            await pilot.pause()
 
-    mock_worker.cancel.assert_called_once()
-    mock_old_branch_list.remove.assert_called_once()
-    app.mount.assert_called_once()
-    mock_new_branch_list.focus.assert_called_once()
-    app.load_metadata.assert_called_once()
-    assert len(app.branches) == 3
+            assert isinstance(app.screen, BranchNameInputScreen)
+            assert client.create_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Help (h)
+# ---------------------------------------------------------------------------
+
+
+async def test_pressing_h_opens_help_screen(sample_branches: list[BranchInfo]) -> None:
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+
+    async with app.run_test() as pilot:
+        await pilot.press("h")
+        await pilot.pause()
+
+        assert isinstance(app.screen, HelpScreen)
+
+
+async def test_help_screen_close_button_dismisses_screen(
+    sample_branches: list[BranchInfo],
+) -> None:
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+
+    async with app.run_test() as pilot:
+        await pilot.press("h")
+        await pilot.pause()
+        assert isinstance(app.screen, HelpScreen)
+
+        await pilot.click("#close")
+        await pilot.pause()
+
+        assert not isinstance(app.screen, HelpScreen)
+
+
+# ---------------------------------------------------------------------------
+# Refresh after action
+# ---------------------------------------------------------------------------
+
+
+async def test_checkout_refreshes_branch_list_with_remote_state(
+    sample_branches: list[BranchInfo],
+) -> None:
+    # The client holds an extra branch the initial view doesn't know about;
+    # after the checkout-triggered refresh it should appear.
+    hotfix = _branch("hotfix", creator_date=datetime(2025, 1, 3))
+    client = FakeGitClient(branches=[*sample_branches, hotfix])
+    app = HopApp(list(sample_branches), client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert {b.name for b in app.query_one(BranchList).branches} == {"main", "feature"}
+
+        await pilot.press("c")
+        await pilot.pause()
+
+        assert {b.name for b in app.query_one(BranchList).branches} == {
+            "main",
+            "feature",
+            "hotfix",
+        }
+
+
+async def test_refresh_failure_shows_error_status(
+    sample_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=sample_branches)
+    app = HopApp(sample_branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        client.get_branches_error = RuntimeError("git unavailable")
+
+        await pilot.press("c")
+        await pilot.pause()
+
+        status = app.query_one("#status", Static)
+        assert "Error refreshing branches" in str(status.content)
+
+
+# ---------------------------------------------------------------------------
+# Top-level entry point
+# ---------------------------------------------------------------------------
 
 
 def test_run_interactive_ui_constructs_HopApp_with_branches_and_client_and_runs_it(
@@ -539,257 +765,3 @@ def test_run_interactive_ui_constructs_HopApp_with_branches_and_client_and_runs_
 
         mock_app_class.assert_called_once_with(sample_branches, client)
         mock_app_instance.run.assert_called_once()
-
-
-def test_action_new_branch_uses_configured_prefix_for_source_branch(
-    sample_branches: list[BranchInfo],
-) -> None:
-    app = HopApp(sample_branches)
-
-    # Mock query_one to return a mock BranchList
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 0
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.push_screen = Mock()  # type: ignore[method-assign]
-
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(
-            branch_prefixes={"main": "feature/"}, default_branch_prefix=""
-        )
-        app.action_new_branch()
-
-        # Should show input dialog
-        app.push_screen.assert_called_once()
-        # Verify it's calling BranchNameInputScreen with correct prefix
-        args, _ = app.push_screen.call_args
-        assert args[0].source_branch == "main"
-        assert args[0].prefix == "feature/"
-
-
-def test_action_new_branch_uses_default_prefix_when_branch_has_no_configured_prefix(
-    sample_branches: list[BranchInfo],
-) -> None:
-    app = HopApp(sample_branches)
-
-    # Mock query_one to return a mock BranchList
-    mock_branch_list = Mock()
-    mock_branch_list.cursor_row = 1
-    app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
-    app.push_screen = Mock()  # type: ignore[method-assign]
-
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(
-            branch_prefixes={"main": "feature/"}, default_branch_prefix="hotfix/"
-        )
-        app.action_new_branch()
-
-        # Should show input dialog
-        app.push_screen.assert_called_once()
-        # Verify it's using default prefix for 'feature' branch
-        args, _ = app.push_screen.call_args
-        assert args[0].source_branch == "feature"
-        assert args[0].prefix == "hotfix/"
-
-
-def test_help_screen_close_button_dismisses_the_screen() -> None:
-    screen = HelpScreen()
-    screen.dismiss = Mock()  # type: ignore[method-assign]
-
-    # Create a mock button event
-    mock_button = Mock()
-    mock_button.id = "close"
-    mock_event = Mock()
-    mock_event.button = mock_button
-
-    screen.on_button_pressed(mock_event)
-    screen.dismiss.assert_called_once()
-
-
-@pytest.mark.parametrize(
-    "button_id,expected_value",
-    [
-        pytest.param("confirm", True, id="confirm button -> True"),
-        pytest.param("cancel", False, id="cancel button -> False"),
-    ],
-)
-def test_confirm_delete_screen_button_dismisses_with_corresponding_value(
-    button_id: str, expected_value: bool
-) -> None:
-    screen = ConfirmDeleteScreen("test-branch", "=", True)
-    screen.dismiss = Mock()  # type: ignore[method-assign]
-
-    mock_button = Mock()
-    mock_button.id = button_id
-    mock_event = Mock()
-    mock_event.button = mock_button
-
-    screen.on_button_pressed(mock_event)
-
-    screen.dismiss.assert_called_once_with(expected_value)
-
-
-def test_branch_name_input_create_button_dismisses_with_entered_name() -> None:
-    screen = BranchNameInputScreen("main")
-    screen.dismiss = Mock()  # type: ignore[method-assign]
-
-    # Mock input field
-    mock_input = Mock()
-    mock_input.value = "new-branch"
-    screen.query_one = Mock(return_value=mock_input)  # type: ignore[method-assign]
-
-    mock_button = Mock()
-    mock_button.id = "create"
-    mock_event = Mock()
-    mock_event.button = mock_button
-
-    screen.on_button_pressed(mock_event)
-    screen.dismiss.assert_called_once_with("new-branch")
-
-
-def test_branch_name_input_create_button_refocuses_field_when_name_is_blank() -> None:
-    screen = BranchNameInputScreen("main")
-    screen.dismiss = Mock()  # type: ignore[method-assign]
-
-    # Mock input field with empty value
-    mock_input = Mock()
-    mock_input.value = "   "
-    screen.query_one = Mock(return_value=mock_input)  # type: ignore[method-assign]
-
-    mock_button = Mock()
-    mock_button.id = "create"
-    mock_event = Mock()
-    mock_event.button = mock_button
-
-    screen.on_button_pressed(mock_event)
-    # Should not dismiss if empty
-    screen.dismiss.assert_not_called()
-    # Should refocus input
-    mock_input.focus.assert_called_once()
-
-
-def test_branch_name_input_cancel_button_dismisses_with_none() -> None:
-    screen = BranchNameInputScreen("main")
-    screen.dismiss = Mock()  # type: ignore[method-assign]
-
-    mock_button = Mock()
-    mock_button.id = "cancel"
-    mock_event = Mock()
-    mock_event.button = mock_button
-
-    screen.on_button_pressed(mock_event)
-    screen.dismiss.assert_called_once_with(None)
-
-
-def test_branch_name_input_enter_key_dismisses_with_entered_name() -> None:
-    screen = BranchNameInputScreen("main")
-    screen.dismiss = Mock()  # type: ignore[method-assign]
-
-    mock_event = Mock()
-    mock_event.value = "new-branch"
-
-    screen.on_input_submitted(mock_event)
-    screen.dismiss.assert_called_once_with("new-branch")
-
-
-def test_branch_name_input_enter_key_does_nothing_when_name_is_blank() -> None:
-    screen = BranchNameInputScreen("main")
-    screen.dismiss = Mock()  # type: ignore[method-assign]
-
-    mock_event = Mock()
-    mock_event.value = "   "
-
-    screen.on_input_submitted(mock_event)
-    # Should not dismiss if empty
-    screen.dismiss.assert_not_called()
-
-
-def _status_branch(track_status: str) -> BranchInfo:
-    return BranchInfo(
-        name="test",
-        creator_date=datetime(2025, 1, 1),
-        last_commit_message="Test",
-        track_status=track_status,
-        is_loading=False,
-    )
-
-
-@pytest.mark.parametrize(
-    "track_status,expected_plain,expected_style",
-    [
-        pytest.param("<", "<", "bright_yellow", id="behind"),
-        pytest.param(">", ">", "bright_cyan", id="ahead"),
-        pytest.param("<>", "<>", "bright_red", id="diverged"),
-        pytest.param("", "  ", "dim white", id="no upstream"),
-    ],
-)
-def test_format_status_renders_track_status_with_expected_color(
-    track_status: str, expected_plain: str, expected_style: str
-) -> None:
-    status = format_status(_status_branch(track_status))
-
-    assert isinstance(status, Text)
-    assert status.plain == expected_plain
-    assert str(status.style) == expected_style
-
-
-def test_remove_branch_is_noop_for_out_of_range_indices() -> None:
-    with patch("hop.ui.get_current_branch", return_value="main"):
-        branches = [
-            BranchInfo(
-                name="test1",
-                creator_date=datetime(2025, 1, 1),
-                last_commit_message="Test 1",
-            ),
-            BranchInfo(
-                name="test2",
-                creator_date=datetime(2025, 1, 2),
-                last_commit_message="Test 2",
-            ),
-        ]
-        branch_list = BranchList(branches)
-
-        # Try to remove with negative index
-        branch_list.remove_branch(-1)
-        assert len(branch_list.branches) == 2
-
-        # Try to remove with out of range index
-        branch_list.remove_branch(10)
-        assert len(branch_list.branches) == 2
-
-
-def test_action_help_pushes_help_screen(sample_branches: list[BranchInfo]) -> None:
-    app = HopApp(sample_branches)
-    app.push_screen = Mock()  # type: ignore[method-assign]
-
-    app.action_help()
-
-    # Should push HelpScreen
-    app.push_screen.assert_called_once()
-    args, _ = app.push_screen.call_args
-    assert isinstance(args[0], HelpScreen)
-
-
-def test_update_branch_redraws_current_branch_with_marker() -> None:
-    with patch("hop.ui.get_current_branch", return_value="test"):
-        branch = BranchInfo(
-            name="test",
-            creator_date=datetime(2025, 1, 1),
-            last_commit_message="Original",
-        )
-        branch_list = BranchList([branch])
-        branch_list.update_cell_at = Mock()  # type: ignore[method-assign]
-
-        # Update with new metadata
-        updated_branch = BranchInfo(
-            name="test",
-            creator_date=datetime(2025, 1, 1),
-            last_commit_message="Updated",
-            upstream="origin/test",
-            track_status="=",
-            is_loading=False,
-        )
-
-        branch_list.update_branch(updated_branch, 0)
-
-        # Should update cells
-        assert branch_list.update_cell_at.call_count == 4
