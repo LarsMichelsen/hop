@@ -1,6 +1,15 @@
 # Example configuration file for hop
 # Place this file at: ~/.config/hop/config.toml
 
+# UI options
+[ui]
+# Theme: "auto" (default — honours $HOP_THEME, otherwise dark),
+# "light", "dark", or any built-in Textual theme name such as
+# "nord", "gruvbox", "dracula", "monokai", "tokyo-night",
+# "catppuccin-mocha", "catppuccin-latte", "solarized-light", "flexoki",
+# "textual-ansi".
+theme = "auto"
+
 # Default prefix for branches not specified in [branch_prefixes]
 [defaults]
 branch_prefix = ""

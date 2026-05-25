@@ -81,7 +81,7 @@ def test_format_branch_name_returns_plain_string_for_non_current_branches() -> N
         pytest.param("<", "<", "bright_yellow", id="behind"),
         pytest.param(">", ">", "bright_cyan", id="ahead"),
         pytest.param("<>", "<>", "bright_red", id="diverged"),
-        pytest.param("", "  ", "dim white", id="no upstream"),
+        pytest.param("", "  ", "dim", id="no upstream"),
     ],
 )
 def test_format_status_renders_track_status_with_expected_color(
@@ -96,13 +96,13 @@ def test_format_status_renders_track_status_with_expected_color(
     assert str(status.style) == expected_style
 
 
-def test_format_status_renders_loading_marker_in_dim_white() -> None:
+def test_format_status_renders_loading_marker_dimmed() -> None:
     branch = _branch("x", is_loading=True)
 
     status = format_status(branch)
 
     assert status.plain == "--"
-    assert str(status.style) == "dim white"
+    assert str(status.style) == "dim"
 
 
 # ---------------------------------------------------------------------------
@@ -745,6 +745,77 @@ async def test_refresh_failure_shows_error_status(
 
         status = app.query_one("#status", Static)
         assert "Error refreshing branches" in str(status.content)
+
+
+# ---------------------------------------------------------------------------
+# Theme
+# ---------------------------------------------------------------------------
+
+
+async def test_on_mount_applies_theme_from_config(
+    sample_branches: list[BranchInfo],
+) -> None:
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="", theme="light")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            assert app.theme == "textual-light"
+
+
+async def test_on_mount_resolves_auto_theme_from_hop_theme_env(
+    sample_branches: list[BranchInfo],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOP_THEME", "nord")
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="", theme="auto")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            assert app.theme == "nord"
+
+
+async def test_pressing_t_toggles_between_dark_and_light(
+    sample_branches: list[BranchInfo],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HOP_THEME", raising=False)
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="", theme="dark")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert app.theme == "textual-dark"
+
+            await pilot.press("t")
+            await pilot.pause()
+            assert app.theme == "textual-light"
+
+            await pilot.press("t")
+            await pilot.pause()
+            assert app.theme == "textual-dark"
+
+
+async def test_toggle_theme_action_reports_new_theme_in_status(
+    sample_branches: list[BranchInfo],
+) -> None:
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+
+    with patch("hop.ui.load_config") as mock_config:
+        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="", theme="dark")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("t")
+            await pilot.pause()
+
+            status = app.query_one("#status", Static)
+            assert "textual-light" in str(status.content)
 
 
 # ---------------------------------------------------------------------------

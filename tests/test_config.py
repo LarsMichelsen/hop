@@ -18,6 +18,7 @@ def test_load_config_returns_empty_config_when_file_does_not_exist() -> None:
 
         assert config.branch_prefixes == {}
         assert config.default_branch_prefix == ""
+        assert config.theme == "auto"
 
 
 def test_load_config_reads_defaults_and_branch_prefixes_from_valid_toml() -> None:
@@ -153,6 +154,50 @@ def test_get_prefix_for_branch_returns_empty_string_when_default_is_empty() -> N
         default_branch_prefix="",
     )
     assert get_prefix_for_branch("unknown", config) == ""
+
+
+def test_load_config_reads_ui_theme_setting() -> None:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+        f.write(
+            """
+[ui]
+theme = "light"
+"""
+        )
+        f.flush()
+        temp_path = Path(f.name)
+
+    try:
+        with patch("hop.config.get_config_path") as mock_path:
+            mock_path.return_value = temp_path
+
+            config = load_config()
+
+            assert config.theme == "light"
+    finally:
+        temp_path.unlink()
+
+
+def test_load_config_defaults_theme_to_auto_when_ui_section_missing() -> None:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+        f.write(
+            """
+[defaults]
+branch_prefix = "feat/"
+"""
+        )
+        f.flush()
+        temp_path = Path(f.name)
+
+    try:
+        with patch("hop.config.get_config_path") as mock_path:
+            mock_path.return_value = temp_path
+
+            config = load_config()
+
+            assert config.theme == "auto"
+    finally:
+        temp_path.unlink()
 
 
 def test_load_config_preserves_quoted_branch_keys_with_special_characters() -> None:

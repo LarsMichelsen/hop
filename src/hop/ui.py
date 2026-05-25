@@ -1,6 +1,7 @@
 """Text-based UI for hop."""
 
 import contextlib
+import os
 from typing import ClassVar
 
 from rich.text import Text
@@ -18,6 +19,7 @@ from hop.git import (
     SubprocessGitClient,
     get_current_branch,
 )
+from hop.theme import resolve_theme, toggle_dark_light
 
 
 class HelpScreen(ModalScreen[None]):  # type: ignore[misc]
@@ -72,6 +74,7 @@ Actions:
   r          Rebase current branch to selected branch's upstream
   d          Delete selected branch (with confirmation)
   n          Create new branch from selected branch
+  t          Toggle light/dark theme
   h          Show this help screen
   q          Quit application
 
@@ -262,7 +265,7 @@ def format_status(branch: BranchInfo) -> Text:
     <> diverged (red), -- loading or no upstream (dim).
     """
     if branch.is_loading:
-        return Text("--", style="dim white")
+        return Text("--", style="dim")
 
     status = branch.track_status if branch.track_status else "  "
 
@@ -275,7 +278,7 @@ def format_status(branch: BranchInfo) -> Text:
     elif status == "<>":
         return Text(status, style="bright_red")
     else:
-        return Text(status, style="dim white")
+        return Text(status, style="dim")
 
 
 def format_branch_name(branch_name: str, is_current: bool) -> Text | str:
@@ -402,6 +405,7 @@ class HopApp(App[None]):
         ("r", "rebase", "Rebase"),
         ("d", "delete", "Delete"),
         ("n", "new_branch", "New Branch"),
+        ("t", "toggle_theme", "Toggle Theme"),
         ("h", "help", "Help"),
         ("q", "quit", "Quit"),
         ("ctrl+c", "quit", "Quit"),
@@ -428,8 +432,14 @@ class HopApp(App[None]):
             )
 
     def on_mount(self) -> None:
-        """Start loading metadata when app is mounted."""
+        """Apply configured theme and start loading metadata when app is mounted."""
+        self.theme = resolve_theme(load_config().theme, os.environ)
         self.load_metadata()
+
+    def action_toggle_theme(self) -> None:
+        """Toggle between Textual's dark and light themes."""
+        self.theme = toggle_dark_light(self.theme)
+        self.show_status(f"Theme: {self.theme}")
 
     @work(exclusive=False, thread=True)
     def load_metadata_for_branch(self, branch: BranchInfo, index: int) -> BranchInfo:

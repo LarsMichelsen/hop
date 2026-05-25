@@ -7,6 +7,7 @@ from pathlib import Path
 class Config:
     branch_prefixes: dict[str, str]
     default_branch_prefix: str
+    theme: str = "auto"
 
 
 def get_config_path() -> Path:
@@ -25,10 +26,12 @@ def load_config() -> Config:
 
         branch_prefixes = data.get("branch_prefixes", {})
         default_branch_prefix = data.get("defaults", {}).get("branch_prefix", "")
+        theme = data.get("ui", {}).get("theme", "auto")
 
         return Config(
             branch_prefixes=branch_prefixes,
             default_branch_prefix=default_branch_prefix,
+            theme=theme,
         )
     except (tomllib.TOMLDecodeError, OSError):
         return Config(branch_prefixes={}, default_branch_prefix="")
