@@ -62,10 +62,6 @@ select = [
     "SIM", # flake8-simplify
     "C4",  # flake8-comprehensions
 ]
-ignore = []
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["SIM117"]  # Allow nested with statements in tests
 
 [tool.ruff.format]
 quote-style = "double"

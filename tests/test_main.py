@@ -17,28 +17,34 @@ def test_main_not_in_git_repo() -> None:
 
 def test_main_get_branches_fails() -> None:
     """Test that main exits when get_branches_fast fails."""
-    with patch("hop.main.is_git_repo", return_value=True):
-        with patch("hop.main.get_branches_fast", side_effect=RuntimeError("Git error")):
-            with pytest.raises(SystemExit) as exc_info:
-                main()
-            assert exc_info.value.code == 1
+    with (
+        patch("hop.main.is_git_repo", return_value=True),
+        patch("hop.main.get_branches_fast", side_effect=RuntimeError("Git error")),
+    ):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 1
 
 
 def test_main_no_branches() -> None:
     """Test that main exits when there are no branches."""
-    with patch("hop.main.is_git_repo", return_value=True):
-        with patch("hop.main.get_branches_fast", return_value=[]):
-            with pytest.raises(SystemExit) as exc_info:
-                main()
-            assert exc_info.value.code == 1
+    with (
+        patch("hop.main.is_git_repo", return_value=True),
+        patch("hop.main.get_branches_fast", return_value=[]),
+    ):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 1
 
 
 def test_main_ui_exception() -> None:
     """Test that main exits when UI raises an exception."""
     mock_branch = Mock()
-    with patch("hop.main.is_git_repo", return_value=True):
-        with patch("hop.main.get_branches_fast", return_value=[mock_branch]):
-            with patch("hop.main.run_interactive_ui", side_effect=Exception("UI error")):
-                with pytest.raises(SystemExit) as exc_info:
-                    main()
-                assert exc_info.value.code == 1
+    with (
+        patch("hop.main.is_git_repo", return_value=True),
+        patch("hop.main.get_branches_fast", return_value=[mock_branch]),
+        patch("hop.main.run_interactive_ui", side_effect=Exception("UI error")),
+    ):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 1

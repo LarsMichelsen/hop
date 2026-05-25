@@ -79,9 +79,11 @@ def test_get_current_branch_error() -> None:
     mock_result.returncode = 1
     mock_result.stderr = "not a git repository"
 
-    with patch("subprocess.run", return_value=mock_result):
-        with pytest.raises(RuntimeError, match="Failed to get current branch"):
-            get_current_branch()
+    with (
+        patch("subprocess.run", return_value=mock_result),
+        pytest.raises(RuntimeError, match="Failed to get current branch"),
+    ):
+        get_current_branch()
 
 
 def test_get_branches_fast() -> None:
@@ -111,9 +113,11 @@ def test_get_branches_fast_error() -> None:
     mock_result.returncode = 1
     mock_result.stderr = "fatal: not a git repository"
 
-    with patch("subprocess.run", return_value=mock_result):
-        with pytest.raises(RuntimeError, match="Failed to get branches"):
-            get_branches_fast()
+    with (
+        patch("subprocess.run", return_value=mock_result),
+        pytest.raises(RuntimeError, match="Failed to get branches"),
+    ):
+        get_branches_fast()
 
 
 def test_fetch_branch_metadata() -> None:
@@ -140,9 +144,11 @@ def test_checkout_branch_error() -> None:
     mock_result.returncode = 1
     mock_result.stderr = "error: pathspec 'nonexistent' did not match"
 
-    with patch("subprocess.run", return_value=mock_result):
-        with pytest.raises(RuntimeError, match="Failed to checkout branch"):
-            checkout_branch("nonexistent")
+    with (
+        patch("subprocess.run", return_value=mock_result),
+        pytest.raises(RuntimeError, match="Failed to checkout branch"),
+    ):
+        checkout_branch("nonexistent")
 
 
 def test_get_base_branch_with_upstream() -> None:
@@ -208,10 +214,12 @@ def test_rebase_to_branch_error() -> None:
     mock_rebase.returncode = 1
     mock_rebase.stderr = "fatal: conflict"
 
-    with patch("hop.git.get_base_branch", return_value="main"):
-        with patch("subprocess.run", side_effect=[mock_checkout, mock_rebase]):
-            with pytest.raises(RuntimeError, match="Failed to rebase to main"):
-                rebase_to_branch("feature")
+    with (
+        patch("hop.git.get_base_branch", return_value="main"),
+        patch("subprocess.run", side_effect=[mock_checkout, mock_rebase]),
+        pytest.raises(RuntimeError, match="Failed to rebase to main"),
+    ):
+        rebase_to_branch("feature")
 
 
 def test_delete_branch_error() -> None:
@@ -220,9 +228,11 @@ def test_delete_branch_error() -> None:
     mock_result.returncode = 1
     mock_result.stderr = "error: branch 'main' not found"
 
-    with patch("subprocess.run", return_value=mock_result):
-        with pytest.raises(RuntimeError, match="Failed to delete branch"):
-            delete_branch("main")
+    with (
+        patch("subprocess.run", return_value=mock_result),
+        pytest.raises(RuntimeError, match="Failed to delete branch"),
+    ):
+        delete_branch("main")
 
 
 def test_get_branches_fast_empty_output() -> None:
@@ -335,17 +345,21 @@ def test_rebase_to_branch_success() -> None:
     mock_success = Mock()
     mock_success.returncode = 0
 
-    with patch("hop.git.get_base_branch", return_value="main"):
-        with patch("subprocess.run", side_effect=[mock_success, mock_success]):
-            # Should not raise an exception
-            rebase_to_branch("feature")
+    with (
+        patch("hop.git.get_base_branch", return_value="main"),
+        patch("subprocess.run", side_effect=[mock_success, mock_success]),
+    ):
+        # Should not raise an exception
+        rebase_to_branch("feature")
 
 
 def test_rebase_to_branch_no_base() -> None:
     """Test that we handle the case when base branch cannot be determined."""
-    with patch("hop.git.get_base_branch", return_value=None):
-        with pytest.raises(RuntimeError, match="Cannot determine base branch"):
-            rebase_to_branch("orphan")
+    with (
+        patch("hop.git.get_base_branch", return_value=None),
+        pytest.raises(RuntimeError, match="Cannot determine base branch"),
+    ):
+        rebase_to_branch("orphan")
 
 
 def test_delete_branch_success() -> None:
@@ -364,9 +378,11 @@ def test_delete_branch_success() -> None:
 
 def test_delete_current_branch() -> None:
     """Test that we cannot delete the current branch."""
-    with patch("hop.git.get_current_branch", return_value="main"):
-        with pytest.raises(RuntimeError, match="Cannot delete the currently checked out branch"):
-            delete_branch("main")
+    with (
+        patch("hop.git.get_current_branch", return_value="main"),
+        pytest.raises(RuntimeError, match="Cannot delete the currently checked out branch"),
+    ):
+        delete_branch("main")
 
 
 def test_create_branch_success() -> None:
@@ -398,6 +414,8 @@ def test_create_branch_creation_error() -> None:
     mock_result.returncode = 1
     mock_result.stderr = "fatal: branch already exists"
 
-    with patch("subprocess.run", return_value=mock_result):
-        with pytest.raises(RuntimeError, match="Failed to create branch"):
-            create_branch("main", "existing-branch")
+    with (
+        patch("subprocess.run", return_value=mock_result),
+        pytest.raises(RuntimeError, match="Failed to create branch"),
+    ):
+        create_branch("main", "existing-branch")
