@@ -2,32 +2,30 @@
 
 import sys
 
-from hop.git import get_branches_fast, is_git_repo
+from hop.git import GitClient, SubprocessGitClient
 from hop.ui import run_interactive_ui
 
 
-def main() -> None:
-    """Main entry point for the hop CLI."""
-    # Check if we're in a git repository
-    if not is_git_repo():
+def main(client: GitClient | None = None) -> None:
+    if client is None:
+        client = SubprocessGitClient()
+
+    if not client.is_git_repo():
         print("Error: Not a git repository", file=sys.stderr)
         sys.exit(1)
 
-    # Get branches
     try:
-        branches = get_branches_fast()
+        branches = client.get_branches_fast()
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Check if there are any branches
     if not branches:
         print("No branches found", file=sys.stderr)
         sys.exit(1)
 
-    # Run the UI
     try:
-        run_interactive_ui(branches)
+        run_interactive_ui(branches, client)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

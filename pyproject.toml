@@ -41,6 +41,7 @@ exclude_lines = [
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
+    "\\.\\.\\.$",  # ellipsis-only lines (Protocol method stubs)
 ]
 
 [tool.basedpyright]

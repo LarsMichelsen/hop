@@ -7,6 +7,7 @@ import pytest
 
 from hop.git import (
     BranchInfo,
+    SubprocessGitClient,
     checkout_branch,
     create_branch,
     delete_branch,
@@ -15,7 +16,6 @@ from hop.git import (
     get_branches_fast,
     get_current_branch,
     is_git_repo,
-    rebase_to_branch,
 )
 
 
@@ -205,21 +205,23 @@ def test_get_base_branch_none() -> None:
 
 def test_rebase_to_branch_error() -> None:
     """Test that we handle errors when rebasing to a branch."""
-    # Mock successful checkout
+
+    class StubClient(SubprocessGitClient):
+        def get_base_branch(self, branch_name: str) -> str | None:
+            return "main"
+
     mock_checkout = Mock()
     mock_checkout.returncode = 0
 
-    # Mock failed rebase
     mock_rebase = Mock()
     mock_rebase.returncode = 1
     mock_rebase.stderr = "fatal: conflict"
 
     with (
-        patch("hop.git.get_base_branch", return_value="main"),
         patch("subprocess.run", side_effect=[mock_checkout, mock_rebase]),
         pytest.raises(RuntimeError, match="Failed to rebase to main"),
     ):
-        rebase_to_branch("feature")
+        StubClient().rebase_to_branch("feature")
 
 
 def test_delete_branch_error() -> None:
@@ -341,25 +343,28 @@ def test_checkout_branch_success() -> None:
 
 def test_rebase_to_branch_success() -> None:
     """Test successful rebase to branch."""
-    # Mock successful operations
+
+    class StubClient(SubprocessGitClient):
+        def get_base_branch(self, branch_name: str) -> str | None:
+            return "main"
+
     mock_success = Mock()
     mock_success.returncode = 0
 
-    with (
-        patch("hop.git.get_base_branch", return_value="main"),
-        patch("subprocess.run", side_effect=[mock_success, mock_success]),
-    ):
+    with patch("subprocess.run", side_effect=[mock_success, mock_success]):
         # Should not raise an exception
-        rebase_to_branch("feature")
+        StubClient().rebase_to_branch("feature")
 
 
 def test_rebase_to_branch_no_base() -> None:
     """Test that we handle the case when base branch cannot be determined."""
-    with (
-        patch("hop.git.get_base_branch", return_value=None),
-        pytest.raises(RuntimeError, match="Cannot determine base branch"),
-    ):
-        rebase_to_branch("orphan")
+
+    class StubClient(SubprocessGitClient):
+        def get_base_branch(self, branch_name: str) -> str | None:
+            return None
+
+    with pytest.raises(RuntimeError, match="Cannot determine base branch"):
+        StubClient().rebase_to_branch("orphan")
 
 
 def test_delete_branch_success() -> None:
@@ -378,11 +383,13 @@ def test_delete_branch_success() -> None:
 
 def test_delete_current_branch() -> None:
     """Test that we cannot delete the current branch."""
-    with (
-        patch("hop.git.get_current_branch", return_value="main"),
-        pytest.raises(RuntimeError, match="Cannot delete the currently checked out branch"),
-    ):
-        delete_branch("main")
+
+    class StubClient(SubprocessGitClient):
+        def get_current_branch(self) -> str:
+            return "main"
+
+    with pytest.raises(RuntimeError, match="Cannot delete the currently checked out branch"):
+        StubClient().delete_branch("main")
 
 
 def test_create_branch_success() -> None:

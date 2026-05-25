@@ -14,12 +14,9 @@ from textual.worker import Worker
 from hop.config import get_prefix_for_branch, load_config
 from hop.git import (
     BranchInfo,
-    checkout_branch,
-    create_branch,
-    delete_branch,
-    fetch_branch_metadata,
+    GitClient,
+    SubprocessGitClient,
     get_current_branch,
-    rebase_to_branch,
 )
 
 
@@ -436,9 +433,10 @@ class HopApp(App[None]):
         ("k", "cursor_up", "Up"),
     ]
 
-    def __init__(self, branches: list[BranchInfo]) -> None:
+    def __init__(self, branches: list[BranchInfo], client: GitClient | None = None) -> None:
         super().__init__()
         self.branches = branches
+        self.client: GitClient = client if client is not None else SubprocessGitClient()
         self.metadata_workers: list[Worker[BranchInfo]] = []
 
     def compose(self) -> ComposeResult:
@@ -460,7 +458,7 @@ class HopApp(App[None]):
     @work(exclusive=False, thread=True)
     def load_metadata_for_branch(self, branch: BranchInfo, index: int) -> BranchInfo:
         """Load metadata for a single branch in a background thread."""
-        return fetch_branch_metadata(branch)
+        return self.client.fetch_branch_metadata(branch)
 
     def load_metadata(self) -> None:
         """Start loading metadata for all branches."""
@@ -502,7 +500,7 @@ class HopApp(App[None]):
 
         branch = self.branches[cursor_row]
         try:
-            checkout_branch(branch.name)
+            self.client.checkout_branch(branch.name)
             self.show_status(f"Checked out branch: {branch.name}")
             # Refresh the branch list to show the updated current branch
             # Pass the branch name to restore focus after refresh
@@ -519,7 +517,7 @@ class HopApp(App[None]):
 
         branch = self.branches[cursor_row]
         try:
-            rebase_to_branch(branch.name)
+            self.client.rebase_to_branch(branch.name)
             self.show_status(f"Rebased to branch: {branch.name}")
             # Refresh the branch list to show the updated state
             # Pass the branch name to restore focus after refresh
@@ -579,7 +577,7 @@ class HopApp(App[None]):
             return
 
         try:
-            delete_branch(branch_name)
+            self.client.delete_branch(branch_name)
 
             # Cancel any pending metadata workers for this branch BEFORE removing
             if row_index < len(self.metadata_workers):
@@ -632,8 +630,8 @@ class HopApp(App[None]):
         source_branch = self.branches[cursor_row]
 
         try:
-            create_branch(source_branch.name, branch_name)
-            checkout_branch(branch_name)
+            self.client.create_branch(source_branch.name, branch_name)
+            self.client.checkout_branch(branch_name)
             self.show_status(f"Created and checked out branch: {branch_name}")
             # Refresh the branch list and move cursor to the new branch
             self.refresh_branches(focus_branch_name=branch_name)
@@ -648,11 +646,9 @@ class HopApp(App[None]):
                 If provided, cursor will move to this branch in the new list.
                 If None, cursor position (row index) will be preserved.
         """
-        from hop.git import get_branches_fast
-
         try:
             # Get updated branch list
-            new_branches = get_branches_fast()
+            new_branches = self.client.get_branches_fast()
 
             # Update app's branch list
             self.branches = new_branches
@@ -706,7 +702,7 @@ class HopApp(App[None]):
         status.update(message)
 
 
-def run_interactive_ui(branches: list[BranchInfo]) -> None:
+def run_interactive_ui(branches: list[BranchInfo], client: GitClient | None = None) -> None:
     """Run the interactive terminal UI for branch selection."""
-    app = HopApp(branches)
+    app = HopApp(branches, client)
     app.run()
