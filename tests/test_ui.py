@@ -14,6 +14,8 @@ from hop.ui import (
     ConfirmDeleteScreen,
     HelpScreen,
     HopApp,
+    format_branch_name,
+    format_status,
     run_interactive_ui,
 )
 from tests.fakes import FakeGitClient
@@ -55,53 +57,15 @@ def test_branch_list_init_no_current_branch(sample_branches: list[BranchInfo]) -
         assert branch_list.current_branch == ""
 
 
-def test_branch_list_add_branch_row(sample_branches: list[BranchInfo]) -> None:
-    """Test adding a branch row."""
-    with patch("hop.ui.get_current_branch", return_value="main"):
-        branch_list = BranchList(sample_branches)
-        # Mock the add_row method
-        branch_list.add_row = Mock()  # type: ignore[method-assign]
-
-        branch_list._add_branch_row(sample_branches[0])  # pyright: ignore[reportPrivateUsage]
-
-        # Should call add_row with formatted data
-        branch_list.add_row.assert_called_once()
-        call_args = branch_list.add_row.call_args[0]
-        assert call_args[0] == "2025-01-01"  # date
-        # Status is now a Text object
-        assert isinstance(call_args[1], Text)
-        assert call_args[1].plain == "--"  # status (loading)
-        # Branch name is now a Text object for current branch
-        assert isinstance(call_args[2], Text)
-        assert call_args[2].plain == "* main"  # branch name with current marker
-        assert call_args[3] == "Initial commit"  # commit message
+def test_format_branch_name_marks_current_branch() -> None:
+    result = format_branch_name("main", is_current=True)
+    assert isinstance(result, Text)
+    assert result.plain == "* main"
 
 
-def test_branch_list_add_branch_row_not_current(sample_branches: list[BranchInfo]) -> None:
-    """Test adding a branch row for non-current branch."""
-    with patch("hop.ui.get_current_branch", return_value="main"):
-        branch_list = BranchList(sample_branches)
-        branch_list.add_row = Mock()  # type: ignore[method-assign]
-
-        branch_list._add_branch_row(sample_branches[1])  # pyright: ignore[reportPrivateUsage]
-
-        call_args = branch_list.add_row.call_args[0]
-        assert call_args[2] == "feature"  # no current marker
-
-
-def test_branch_list_add_branch_row_with_status(sample_branches: list[BranchInfo]) -> None:
-    """Test adding a branch row with status."""
-    with patch("hop.ui.get_current_branch", return_value="main"):
-        branch_list = BranchList(sample_branches)
-        branch_list.add_row = Mock()  # type: ignore[method-assign]
-
-        # Use the feature branch which has status
-        branch_list._add_branch_row(sample_branches[1])  # pyright: ignore[reportPrivateUsage]
-
-        call_args = branch_list.add_row.call_args[0]
-        # Status is now a Text object with green color
-        assert isinstance(call_args[1], Text)
-        assert call_args[1].plain == "="  # track status
+def test_format_branch_name_returns_plain_name_for_other_branches() -> None:
+    result = format_branch_name("feature", is_current=False)
+    assert result == "feature"
 
 
 def test_branch_list_update_branch(sample_branches: list[BranchInfo]) -> None:
@@ -496,7 +460,7 @@ def test_hop_app_handle_new_branch_input_success(sample_branches: list[BranchInf
     app.show_status = Mock()  # type: ignore[method-assign]
     app.refresh_branches = Mock()  # type: ignore[method-assign]
 
-    app._handle_new_branch_input("new-feature")  # type: ignore[reportPrivateUsage]
+    app.handle_new_branch_input("new-feature")
 
     assert client.create_calls == [(sample_branches[0].name, "new-feature")]
     assert client.checkout_calls == ["new-feature"]
@@ -514,7 +478,7 @@ def test_hop_app_handle_new_branch_input_cancelled(sample_branches: list[BranchI
     app.query_one = Mock(return_value=mock_branch_list)  # type: ignore[method-assign]
     app.show_status = Mock()  # type: ignore[method-assign]
 
-    app._handle_new_branch_input(None)  # type: ignore[reportPrivateUsage]
+    app.handle_new_branch_input(None)
 
     assert client.create_calls == []
     app.show_status.assert_not_called()
@@ -532,7 +496,7 @@ def test_hop_app_handle_new_branch_input_error(sample_branches: list[BranchInfo]
     app.show_status = Mock()  # type: ignore[method-assign]
     app.refresh_branches = Mock()  # type: ignore[method-assign]
 
-    app._handle_new_branch_input("existing-branch")  # type: ignore[reportPrivateUsage]
+    app.handle_new_branch_input("existing-branch")
 
     app.show_status.assert_called_once_with("Error: Branch already exists")
     assert client.checkout_calls == []
@@ -553,7 +517,7 @@ def test_hop_app_handle_new_branch_input_checkout_error(
     app.show_status = Mock()  # type: ignore[method-assign]
     app.refresh_branches = Mock()  # type: ignore[method-assign]
 
-    app._handle_new_branch_input("new-feature")  # type: ignore[reportPrivateUsage]
+    app.handle_new_branch_input("new-feature")
 
     assert len(client.create_calls) == 1
     app.show_status.assert_called_once_with("Error: Checkout failed")
@@ -786,68 +750,42 @@ def test_branch_name_input_screen_submit_empty_name() -> None:
     screen.dismiss.assert_not_called()
 
 
-def test_branch_list_format_status_behind() -> None:
-    """Test BranchList status formatting for behind status."""
-    with patch("hop.ui.get_current_branch", return_value="main"):
-        branch = BranchInfo(
-            name="test",
-            creator_date=datetime(2025, 1, 1),
-            last_commit_message="Test",
-            track_status="<",
-            is_loading=False,
-        )
-        branch_list = BranchList([branch])
-        status = branch_list._format_status(branch)  # type: ignore[reportPrivateUsage]
-        assert isinstance(status, Text)
-        assert status.plain == "<"
+def _status_branch(track_status: str) -> BranchInfo:
+    return BranchInfo(
+        name="test",
+        creator_date=datetime(2025, 1, 1),
+        last_commit_message="Test",
+        track_status=track_status,
+        is_loading=False,
+    )
 
 
-def test_branch_list_format_status_ahead() -> None:
-    """Test BranchList status formatting for ahead status."""
-    with patch("hop.ui.get_current_branch", return_value="main"):
-        branch = BranchInfo(
-            name="test",
-            creator_date=datetime(2025, 1, 1),
-            last_commit_message="Test",
-            track_status=">",
-            is_loading=False,
-        )
-        branch_list = BranchList([branch])
-        status = branch_list._format_status(branch)  # type: ignore[reportPrivateUsage]
-        assert isinstance(status, Text)
-        assert status.plain == ">"
+def test_format_status_for_behind_branch_renders_yellow_marker() -> None:
+    status = format_status(_status_branch("<"))
+    assert isinstance(status, Text)
+    assert status.plain == "<"
+    assert str(status.style) == "bright_yellow"
 
 
-def test_branch_list_format_status_diverged() -> None:
-    """Test BranchList status formatting for diverged status."""
-    with patch("hop.ui.get_current_branch", return_value="main"):
-        branch = BranchInfo(
-            name="test",
-            creator_date=datetime(2025, 1, 1),
-            last_commit_message="Test",
-            track_status="<>",
-            is_loading=False,
-        )
-        branch_list = BranchList([branch])
-        status = branch_list._format_status(branch)  # type: ignore[reportPrivateUsage]
-        assert isinstance(status, Text)
-        assert status.plain == "<>"
+def test_format_status_for_ahead_branch_renders_cyan_marker() -> None:
+    status = format_status(_status_branch(">"))
+    assert isinstance(status, Text)
+    assert status.plain == ">"
+    assert str(status.style) == "bright_cyan"
 
 
-def test_branch_list_format_status_no_upstream() -> None:
-    """Test BranchList status formatting for no upstream."""
-    with patch("hop.ui.get_current_branch", return_value="main"):
-        branch = BranchInfo(
-            name="test",
-            creator_date=datetime(2025, 1, 1),
-            last_commit_message="Test",
-            track_status="",
-            is_loading=False,
-        )
-        branch_list = BranchList([branch])
-        status = branch_list._format_status(branch)  # type: ignore[reportPrivateUsage]
-        assert isinstance(status, Text)
-        assert status.plain == "  "
+def test_format_status_for_diverged_branch_renders_red_marker() -> None:
+    status = format_status(_status_branch("<>"))
+    assert isinstance(status, Text)
+    assert status.plain == "<>"
+    assert str(status.style) == "bright_red"
+
+
+def test_format_status_for_branch_without_upstream_renders_dim_blank() -> None:
+    status = format_status(_status_branch(""))
+    assert isinstance(status, Text)
+    assert status.plain == "  "
+    assert str(status.style) == "dim white"
 
 
 def test_branch_list_remove_branch_invalid_index() -> None:

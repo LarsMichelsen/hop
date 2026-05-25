@@ -255,6 +255,36 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
             self.dismiss(branch_name)
 
 
+def format_status(branch: BranchInfo) -> Text:
+    """Color-code a branch's upstream tracking status for display.
+
+    = synced (green), < behind (yellow), > ahead (cyan),
+    <> diverged (red), -- loading or no upstream (dim).
+    """
+    if branch.is_loading:
+        return Text("--", style="dim white")
+
+    status = branch.track_status if branch.track_status else "  "
+
+    if status == "=":
+        return Text(status, style="bright_green")
+    elif status == "<":
+        return Text(status, style="bright_yellow")
+    elif status == ">":
+        return Text(status, style="bright_cyan")
+    elif status == "<>":
+        return Text(status, style="bright_red")
+    else:
+        return Text(status, style="dim white")
+
+
+def format_branch_name(branch_name: str, is_current: bool) -> Text | str:
+    """Return the branch name with a bright "* " prefix when it is the current branch."""
+    if is_current:
+        return Text.assemble(("* ", "bold bright_green"), branch_name)
+    return branch_name
+
+
 class BranchList(DataTable):  # type: ignore[misc]
     """Widget to display the list of branches."""
 
@@ -264,35 +294,6 @@ class BranchList(DataTable):  # type: ignore[misc]
         self.current_branch = ""
         with contextlib.suppress(RuntimeError):
             self.current_branch = get_current_branch()
-
-    def _format_status(self, branch: BranchInfo) -> Text:
-        """Format track status with color coding.
-
-        Color scheme:
-        - = (synced): green
-        - < (behind): yellow
-        - > (ahead): cyan
-        - <> (diverged): red
-        - -- (loading): dim white
-        - (no upstream): dim white
-        """
-        if branch.is_loading:
-            return Text("--", style="dim white")
-
-        status = branch.track_status if branch.track_status else "  "
-
-        # Apply colors based on track status (using terminal palette)
-        if status == "=":
-            return Text(status, style="bright_green")
-        elif status == "<":
-            return Text(status, style="bright_yellow")
-        elif status == ">":
-            return Text(status, style="bright_cyan")
-        elif status == "<>":
-            return Text(status, style="bright_red")
-        else:
-            # No upstream or empty status
-            return Text(status, style="dim white")
 
     def on_mount(self) -> None:
         """Set up the table when mounted."""
@@ -306,28 +307,13 @@ class BranchList(DataTable):  # type: ignore[misc]
         self.add_column("Branch", width=40)  # type: ignore[misc]
         self.add_column("Last Commit", width=None)  # type: ignore[misc]
 
-        # Add initial rows with loading indicators
         for branch in self.branches:
             self._add_branch_row(branch)
 
     def _add_branch_row(self, branch: BranchInfo) -> None:
-        """Add or update a branch row in the table."""
-        # Format date
         date_str = branch.creator_date.strftime("%Y-%m-%d")
-
-        # Track status with color
-        status = self._format_status(branch)
-
-        # Branch name - highlight current branch with colored marker
-        if branch.name == self.current_branch:
-            branch_name = Text.assemble(
-                ("* ", "bold bright_green"),
-                branch.name,
-            )
-        else:
-            branch_name = branch.name
-
-        # Add row
+        status = format_status(branch)
+        branch_name = format_branch_name(branch.name, branch.name == self.current_branch)
         self.add_row(date_str, status, branch_name, branch.last_commit_message)  # type: ignore[misc]
 
     def update_branch(self, branch: BranchInfo, row_index: int) -> None:
@@ -337,20 +323,10 @@ class BranchList(DataTable):  # type: ignore[misc]
 
         self.branches[row_index] = branch
 
-        # Update the row
         date_str = branch.creator_date.strftime("%Y-%m-%d")
-        status = self._format_status(branch)
+        status = format_status(branch)
+        branch_name = format_branch_name(branch.name, branch.name == self.current_branch)
 
-        # Branch name - highlight current branch with colored marker
-        if branch.name == self.current_branch:
-            branch_name = Text.assemble(
-                ("* ", "bold bright_green"),
-                branch.name,
-            )
-        else:
-            branch_name = branch.name
-
-        # Update cells
         self.update_cell_at((row_index, 0), date_str)  # type: ignore[arg-type,misc]
         self.update_cell_at((row_index, 1), status)  # type: ignore[arg-type,misc]
         self.update_cell_at((row_index, 2), branch_name)  # type: ignore[arg-type,misc]
@@ -608,10 +584,10 @@ class HopApp(App[None]):
 
         self.push_screen(
             BranchNameInputScreen(source_branch.name, prefix),
-            self._handle_new_branch_input,
+            self.handle_new_branch_input,
         )
 
-    def _handle_new_branch_input(self, branch_name: str | None) -> None:
+    def handle_new_branch_input(self, branch_name: str | None) -> None:
         """Handle the result of branch name input.
 
         Args:
