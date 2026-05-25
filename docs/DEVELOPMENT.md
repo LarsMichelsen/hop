@@ -9,21 +9,22 @@ All development tools are managed via `uv`:
 
 Pre-commit is wired up via [prek](https://prek.j178.dev), which runs the four
 checks below automatically on every `git commit`. The hook list lives in
-`prek.toml`.
+`prek.toml`. prek itself is a dev dependency, so `uv sync` installs it
+alongside ruff, basedpyright, and pytest.
 
 ## One-Time Setup
 
-Install prek and register the git hook:
+Register the git hook:
 
 ```bash
-uv tool install prek   # or: brew install prek / pipx install prek
-prek install           # writes .git/hooks/pre-commit
+uv sync                  # installs prek (and the other dev tools)
+uv run prek install      # writes .git/hooks/pre-commit
 ```
 
 After this, every `git commit` runs the checks. Run them manually any time:
 
 ```bash
-prek run --all-files
+uv run prek run --all-files
 ```
 
 ## Mandatory Pre-Commit Checks
@@ -104,7 +105,7 @@ commit so you can review the changes, re-stage them, and commit again.
 To run everything manually before committing:
 
 ```bash
-prek run --all-files
+uv run prek run --all-files
 ```
 
 Or invoke the underlying tools directly:

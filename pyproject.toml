@@ -71,6 +71,7 @@ indent-style = "space"
 [dependency-groups]
 dev = [
     "basedpyright>=1.33.0",
+    "prek>=0.4.1",
     "pytest>=8.4.2",
     "pytest-cov>=6.0.0",
     "ruff>=0.14.4",

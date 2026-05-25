@@ -4,7 +4,8 @@
 
 **CRITICAL:** Every commit must pass all four checks below. They are wired up
 as a [prek](https://prek.j178.dev) hook (config in `prek.toml`) so a plain
-`git commit` runs them automatically.
+`git commit` runs them automatically. prek is a dev dependency — `uv sync`
+installs it, and `uv run prek install` registers the git hook.
 
 ### The four checks
 1. `uv run ruff format` — auto-format
@@ -15,15 +16,15 @@ as a [prek](https://prek.j178.dev) hook (config in `prek.toml`) so a plain
 ### Preferred flow
 
 ```bash
-prek run --all-files     # run everything before committing
+uv run prek run --all-files   # run everything before committing
 git add <files>
-git commit -m "..."       # prek runs the same hooks again
+git commit -m "..."            # prek runs the same hooks again
 ```
 
 If a hook modifies files (ruff format / ruff check --fix), prek aborts the
 commit. Re-stage the modified files and commit again.
 
-### Fallback one-liner (if prek is not installed)
+### Fallback one-liner
 
 ```bash
 uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright && uv run python -m pytest
