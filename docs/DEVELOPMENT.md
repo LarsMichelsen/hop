@@ -6,19 +6,14 @@ All development tools are managed via `uv`:
 - **ruff** - Code formatting and linting
 - **basedpyright** - Static type checking (strict mode)
 - **pytest** - Testing framework
-
-Pre-commit is wired up via [prek](https://prek.j178.dev), which runs the four
-checks below automatically on every `git commit`. The hook list lives in
-`prek.toml`. prek itself is a dev dependency, so `uv sync` installs it
-alongside ruff, basedpyright, and pytest.
+- **prek** - Pre-commit hooks to run all necessary checks
 
 ## One-Time Setup
 
-Register the git hook:
+Register the all dev tools:
 
 ```bash
-uv sync                  # installs prek (and the other dev tools)
-uv run prek install      # writes .git/hooks/pre-commit
+uv sync
 ```
 
 After this, every `git commit` runs the checks. Run them manually any time:
@@ -27,54 +22,7 @@ After this, every `git commit` runs the checks. Run them manually any time:
 uv run prek run --all-files
 ```
 
-## Mandatory Pre-Commit Checks
-
-**IMPORTANT:** Before committing any code changes, all four checks below must
-pass. With prek installed (see above) they are enforced automatically; the
-manual commands are listed for reference and for invoking individual checks
-during development.
-
-### 1. Code Formatting with Ruff
-
-Format all code automatically:
-```bash
-uv run ruff format
-```
-
-Check formatting without changes:
-```bash
-uv run ruff format --check
-```
-
-### 2. Linting with Ruff
-
-Run linter and auto-fix issues:
-```bash
-uv run ruff check --fix
-```
-
-Check without fixing:
-```bash
-uv run ruff check
-```
-
-### 3. Type Checking with basedpyright
-
-Run strict type checking:
-```bash
-uv run python -m basedpyright
-```
-
-Must pass with zero errors.
-
-### 4. Run Tests with Coverage
-
-Run all tests (coverage is enabled by default):
-```bash
-uv run python -m pytest
-```
-
-**Coverage is automatically measured** and enforced:
+**Test coverage is automatically measured** and enforced:
 - Minimum coverage threshold is configured in `pyproject.toml`
 - Tests will fail if coverage drops below the threshold
 - Coverage report shows missing lines
@@ -101,18 +49,6 @@ git commit -m "Your commit message"   # prek runs all four checks
 
 If any hook modifies files (ruff format, ruff check --fix), prek aborts the
 commit so you can review the changes, re-stage them, and commit again.
-
-To run everything manually before committing:
-
-```bash
-uv run prek run --all-files
-```
-
-Or invoke the underlying tools directly:
-
-```bash
-uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright && uv run python -m pytest
-```
 
 ## Development Cycle
 

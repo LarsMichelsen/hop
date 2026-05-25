@@ -1,36 +1,6 @@
 # Claude Development Instructions for hop
 
-## MANDATORY: Pre-Commit Checks via prek
-
-**CRITICAL:** Every commit must pass all four checks below. They are wired up
-as a [prek](https://prek.j178.dev) hook (config in `prek.toml`) so a plain
-`git commit` runs them automatically. prek is a dev dependency — `uv sync`
-installs it, and `uv run prek install` registers the git hook.
-
-### The four checks
-1. `uv run ruff format` — auto-format
-2. `uv run ruff check --fix` — lint and auto-fix
-3. `uv run python -m basedpyright` — strict type check, zero errors
-4. `uv run python -m pytest` — full suite with `--cov-fail-under` enforced
-
-### Preferred flow
-
-```bash
-uv run prek run --all-files   # run everything before committing
-git add <files>
-git commit -m "..."            # prek runs the same hooks again
-```
-
-If a hook modifies files (ruff format / ruff check --fix), prek aborts the
-commit. Re-stage the modified files and commit again.
-
-### Fallback one-liner
-
-```bash
-uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright && uv run python -m pytest
-```
-
-## No Exceptions
+prek as the pre-commit tool runs all mandatory quality checks automatically.
 
 - DO NOT commit if any hook fails
 - DO NOT skip hooks with `--no-verify` unless the user explicitly asks
