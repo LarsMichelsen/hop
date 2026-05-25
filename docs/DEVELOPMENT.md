@@ -7,9 +7,31 @@ All development tools are managed via `uv`:
 - **basedpyright** - Static type checking (strict mode)
 - **pytest** - Testing framework
 
+Pre-commit is wired up via [prek](https://prek.j178.dev), which runs the four
+checks below automatically on every `git commit`. The hook list lives in
+`prek.toml`.
+
+## One-Time Setup
+
+Install prek and register the git hook:
+
+```bash
+uv tool install prek   # or: brew install prek / pipx install prek
+prek install           # writes .git/hooks/pre-commit
+```
+
+After this, every `git commit` runs the checks. Run them manually any time:
+
+```bash
+prek run --all-files
+```
+
 ## Mandatory Pre-Commit Checks
 
-**IMPORTANT:** Before committing any code changes, you MUST run all three checks:
+**IMPORTANT:** Before committing any code changes, all four checks below must
+pass. With prek installed (see above) they are enforced automatically; the
+manual commands are listed for reference and for invoking individual checks
+during development.
 
 ### 1. Code Formatting with Ruff
 
@@ -69,27 +91,24 @@ Then open `htmlcov/index.html` in a browser.
 
 ## Complete Pre-Commit Workflow
 
-Run all checks in sequence:
+The recommended flow is to let prek run everything on commit:
 
 ```bash
-# 1. Format code
-uv run ruff format
-
-# 2. Fix linting issues
-uv run ruff check --fix
-
-# 3. Type check
-uv run python -m basedpyright
-
-# 4. Run tests
-uv run python -m pytest
-
-# If all pass, commit
 git add .
-git commit -m "Your commit message"
+git commit -m "Your commit message"   # prek runs all four checks
 ```
 
-Or use this one-liner to run all checks:
+If any hook modifies files (ruff format, ruff check --fix), prek aborts the
+commit so you can review the changes, re-stage them, and commit again.
+
+To run everything manually before committing:
+
+```bash
+prek run --all-files
+```
+
+Or invoke the underlying tools directly:
+
 ```bash
 uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright && uv run python -m pytest
 ```
@@ -97,11 +116,8 @@ uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright &
 ## Development Cycle
 
 1. **Write code** - Implement feature or fix
-2. **Format** - `uv run ruff format`
-3. **Lint** - `uv run ruff check --fix`
-4. **Type check** - `uv run python -m basedpyright`
-5. **Test** - `uv run python -m pytest`
-6. **Commit** - Only if all checks pass
+2. **Commit** - `git commit` (prek runs format, lint, type check, and tests)
+3. **Re-stage and retry** if a hook modified files
 
 ## Coding Standards
 
@@ -180,11 +196,13 @@ ERROR: Coverage failure: total of X.XX is less than fail-under=Y.YY
 
 ## Configuration
 
-All tool configurations are in `pyproject.toml`:
+Tool configurations live in `pyproject.toml`:
 - **ruff**: Line length 100, Python 3.12 target
 - **basedpyright**: Strict type checking mode
 - **pytest**: Test discovery in `tests/` directory
 - **coverage**: Minimum threshold, branch coverage enabled
+
+The pre-commit hook list lives in `prek.toml`.
 
 ## CI/CD
 

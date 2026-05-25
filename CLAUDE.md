@@ -1,62 +1,39 @@
 # Claude Development Instructions for hop
 
-## MANDATORY: Pre-Commit Checklist
+## MANDATORY: Pre-Commit Checks via prek
 
-**CRITICAL:** Before ANY commit to this repository, you MUST run ALL of these checks and they MUST pass:
+**CRITICAL:** Every commit must pass all four checks below. They are wired up
+as a [prek](https://prek.j178.dev) hook (config in `prek.toml`) so a plain
+`git commit` runs them automatically.
 
-### 1. Format Code
+### The four checks
+1. `uv run ruff format` — auto-format
+2. `uv run ruff check --fix` — lint and auto-fix
+3. `uv run python -m basedpyright` — strict type check, zero errors
+4. `uv run python -m pytest` — full suite with `--cov-fail-under` enforced
+
+### Preferred flow
+
 ```bash
-uv run ruff format
+prek run --all-files     # run everything before committing
+git add <files>
+git commit -m "..."       # prek runs the same hooks again
 ```
-- Automatically formats all Python code
-- Must run before any commit
 
-### 2. Lint and Fix
-```bash
-uv run ruff check --fix
-```
-- Checks code style and common issues
-- Auto-fixes where possible
-- All issues must be resolved
+If a hook modifies files (ruff format / ruff check --fix), prek aborts the
+commit. Re-stage the modified files and commit again.
 
-### 3. Type Check (Strict Mode)
-```bash
-uv run python -m basedpyright
-```
-- Runs strict type checking
-- MUST pass with ZERO errors
-- No exceptions - fix all type issues
+### Fallback one-liner (if prek is not installed)
 
-### 4. Run All Tests with Coverage
-```bash
-uv run python -m pytest
-```
-- Runs all unit tests with coverage measurement
-- ALL tests MUST pass
-- Coverage MUST NOT decrease below the configured threshold
-- No failing tests allowed in commits
-- Coverage report shows uncovered lines
-
-## One-Liner for All Checks
-
-Run this before every commit:
 ```bash
 uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright && uv run python -m pytest
 ```
 
-## Workflow
-
-1. Write/modify code
-2. **RUN ALL CHECKS** (see above)
-3. Fix any issues found
-4. **VERIFY ALL CHECKS PASS**
-5. Only then commit
-
 ## No Exceptions
 
-- DO NOT commit if any check fails
-- DO NOT skip any of the four checks
-- DO NOT commit without running all checks
+- DO NOT commit if any hook fails
+- DO NOT skip hooks with `--no-verify` unless the user explicitly asks
+- DO NOT bypass the coverage threshold — write tests instead
 - Fix all issues before committing
 
 ## Coverage Verification
@@ -109,16 +86,17 @@ ERROR: Coverage failure: total of 70.00 is less than fail-under=75.00
 
 **Example workflow:**
 ```bash
-# After making changes
-uv run ruff format && uv run ruff check --fix && uv run python -m basedpyright && uv run python -m pytest
-
-# If all pass, immediately commit
-git add .
+# After making changes, let prek run all four hooks during commit
+git add <files>
 git commit -m "$(cat <<'EOF'
 Add feature X
 EOF
 )"
 ```
+
+If prek aborts because a hook (ruff format / ruff check --fix) modified files,
+re-stage them and re-run the commit. If a check fails non-recoverably, fix the
+underlying issue and retry — never use `--no-verify`.
 
 ## Coding Standards
 
