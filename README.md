@@ -6,15 +6,21 @@ Git branch management tool for quick branch hopping.
 
 - Interactive text-based UI for browsing git branches
 - List branches ordered by last commit date
-- Show branch info: date, name, and last commit message
-- Quick actions: checkout, rebase, or delete branches
+- Show branch info: date, sync status, name, and last commit message
+- Quick actions: checkout, rebase, delete, or create branches
 - Shows upstream branch and merge status
 - Vim-style navigation (arrow keys or j/k)
 
 ## Installation
 
+Requires Python 3.12 or newer.
+
 ```bash
-uv sync
+# As a standalone CLI tool
+uv tool install .
+
+# Or with pip
+pip install .
 ```
 
 ## Usage
@@ -25,10 +31,12 @@ hop
 
 ### Controls
 
-- `�`/`�` or `j`/`k` - Navigate branches
+- `↑`/`↓` or `j`/`k` - Navigate branches
 - `c` - Checkout selected branch
-- `r` - Rebase to selected branch
+- `r` - Rebase selected branch onto its base
+- `n` - Create new branch from selected branch
 - `d` - Delete selected branch
+- `h` - Show help screen
 - `q` - Quit
 
 ## Development
