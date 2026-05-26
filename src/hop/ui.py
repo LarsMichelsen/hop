@@ -374,9 +374,12 @@ class HopApp(App[None]):
         overflow-x: hidden;
     }
 
-    /* Use dimmer highlight for focused cursor */
+    /* Dim the focused cursor to a subtle panel highlight. We must set color
+       too: Textual's default cursor color is paired with its default cursor
+       background, so overriding only background yields unreadable contrast. */
     DataTable:focus > .datatable--cursor {
         background: $panel;
+        color: $foreground;
     }
 
     #footer-container {
