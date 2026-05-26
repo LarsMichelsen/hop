@@ -1,6 +1,10 @@
 # hop
 
-Git branch management tool for quick branch hopping.
+Helper for quick git branch hopping.
+
+When you live in short-lived feature branches, switching between them with `git checkout` means
+remembering names and typing them out. `hop` shows the branches you've touched most recently at the
+top, so the one you want is almost always a keystroke away.
 
 ## Features
 
