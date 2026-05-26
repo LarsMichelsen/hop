@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 
-DEFAULT_THEME = "textual-dark"
+DEFAULT_THEME = "textual-ansi"
 
 # Textual ships these themes; see App.available_themes.
 VALID_THEMES: frozenset[str] = frozenset(
@@ -38,7 +38,7 @@ def resolve_theme(setting: str, env: Mapping[str, str]) -> str:
 
     Priority (only when ``setting == "auto"``):
       1. ``HOP_THEME`` env var override
-      2. ``DEFAULT_THEME`` (dark)
+      2. ``DEFAULT_THEME`` (terminal-ansi, adapts to the terminal palette)
 
     A non-"auto" ``setting`` is used directly (with alias resolution); unknown
     values fall back to ``DEFAULT_THEME``.

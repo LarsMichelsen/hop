@@ -3,9 +3,9 @@
 
 # UI options
 [ui]
-# Theme: "auto" (default — honours $HOP_THEME, otherwise dark),
-# "light", "dark", or any built-in Textual theme name such as
-# "nord", "gruvbox", "dracula", "monokai", "tokyo-night",
+# Theme: "auto" (default — honours $HOP_THEME, otherwise adapts to the
+# terminal's ANSI color palette), "light", "dark", or any built-in Textual
+# theme name such as "nord", "gruvbox", "dracula", "monokai", "tokyo-night",
 # "catppuccin-mocha", "catppuccin-latte", "solarized-light", "flexoki",
 # "textual-ansi".
 theme = "auto"
