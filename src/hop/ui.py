@@ -12,7 +12,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Label, Static
 from textual.worker import Worker
 
-from hop.config import get_prefix_for_branch, load_config
+from hop.config import Config, get_prefix_for_branch, load_config
 from hop.git import (
     BranchInfo,
     GitClient,
@@ -413,10 +413,16 @@ class HopApp(App[None]):
         ("k", "cursor_up", "Up"),
     ]
 
-    def __init__(self, branches: list[BranchInfo], client: GitClient | None = None) -> None:
+    def __init__(
+        self,
+        branches: list[BranchInfo],
+        client: GitClient | None = None,
+        config: Config | None = None,
+    ) -> None:
         super().__init__()
         self.branches = branches
         self.client: GitClient = client if client is not None else SubprocessGitClient()
+        self.config: Config = config if config is not None else load_config()
         self.metadata_workers: list[Worker[BranchInfo]] = []
 
     def compose(self) -> ComposeResult:
@@ -433,7 +439,7 @@ class HopApp(App[None]):
 
     def on_mount(self) -> None:
         """Apply configured theme and start loading metadata when app is mounted."""
-        self.theme = resolve_theme(load_config().theme, os.environ)
+        self.theme = resolve_theme(self.config.theme, os.environ)
         self.load_metadata()
 
     def action_toggle_theme(self) -> None:
@@ -589,8 +595,7 @@ class HopApp(App[None]):
 
         source_branch = self.branches[cursor_row]
 
-        config = load_config()
-        prefix = get_prefix_for_branch(source_branch.name, config)
+        prefix = get_prefix_for_branch(source_branch.name, self.config)
 
         self.push_screen(
             BranchNameInputScreen(source_branch.name, prefix),

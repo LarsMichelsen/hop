@@ -7,6 +7,7 @@ import pytest
 from rich.text import Text
 from textual.widgets import Label, Static
 
+from hop.config import Config
 from hop.git import BranchInfo
 from hop.ui import (
     BranchList,
@@ -19,6 +20,11 @@ from hop.ui import (
     run_interactive_ui,
 )
 from tests.fakes import FakeGitClient
+
+
+@pytest.fixture
+def empty_config() -> Config:
+    return Config(branch_prefixes={}, default_branch_prefix="")
 
 
 def _branch(
@@ -459,166 +465,154 @@ async def test_confirm_delete_screen_warns_about_branch_state(
 
 async def test_pressing_n_opens_branch_name_input_with_source_branch(
     sample_branches: list[BranchInfo],
+    empty_config: Config,
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
-    app = HopApp(sample_branches, client=client)
+    app = HopApp(sample_branches, client=client, config=empty_config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.press("n")
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
 
-            assert isinstance(app.screen, BranchNameInputScreen)
-            assert app.screen.source_branch == "main"
-            assert app.screen.prefix == ""
+        assert isinstance(app.screen, BranchNameInputScreen)
+        assert app.screen.source_branch == "main"
+        assert app.screen.prefix == ""
 
 
 async def test_pressing_n_uses_configured_prefix_for_source_branch(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
-    app = HopApp(sample_branches, client=client)
+    config = Config(branch_prefixes={"main": "feature/"}, default_branch_prefix="")
+    app = HopApp(sample_branches, client=client, config=config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(
-            branch_prefixes={"main": "feature/"}, default_branch_prefix=""
-        )
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.press("n")
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
 
-            assert isinstance(app.screen, BranchNameInputScreen)
-            assert app.screen.prefix == "feature/"
+        assert isinstance(app.screen, BranchNameInputScreen)
+        assert app.screen.prefix == "feature/"
 
 
 async def test_pressing_n_uses_default_prefix_when_branch_has_no_configured_prefix(
     sample_branches: list[BranchInfo],
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
-    app = HopApp(sample_branches, client=client)
+    config = Config(branch_prefixes={"main": "feature/"}, default_branch_prefix="hotfix/")
+    app = HopApp(sample_branches, client=client, config=config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(
-            branch_prefixes={"main": "feature/"}, default_branch_prefix="hotfix/"
-        )
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.press("j")  # select "feature"
-            await pilot.press("n")
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")  # select "feature"
+        await pilot.press("n")
+        await pilot.pause()
 
-            assert isinstance(app.screen, BranchNameInputScreen)
-            assert app.screen.source_branch == "feature"
-            assert app.screen.prefix == "hotfix/"
+        assert isinstance(app.screen, BranchNameInputScreen)
+        assert app.screen.source_branch == "feature"
+        assert app.screen.prefix == "hotfix/"
 
 
 async def test_pressing_enter_in_new_branch_dialog_creates_and_checks_out_branch(
     sample_branches: list[BranchInfo],
+    empty_config: Config,
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
-    app = HopApp(sample_branches, client=client)
+    app = HopApp(sample_branches, client=client, config=empty_config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.press("n")
-            await pilot.pause()
-            for ch in "new-feature":
-                await pilot.press(ch)
-            await pilot.press("enter")
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        for ch in "new-feature":
+            await pilot.press(ch)
+        await pilot.press("enter")
+        await pilot.pause()
 
-            assert client.create_calls == [("main", "new-feature")]
-            assert client.checkout_calls == ["new-feature"]
+        assert client.create_calls == [("main", "new-feature")]
+        assert client.checkout_calls == ["new-feature"]
 
 
 async def test_clicking_create_in_new_branch_dialog_creates_branch(
     sample_branches: list[BranchInfo],
+    empty_config: Config,
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
-    app = HopApp(sample_branches, client=client)
+    app = HopApp(sample_branches, client=client, config=empty_config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.press("n")
-            await pilot.pause()
-            for ch in "hotpatch":
-                await pilot.press(ch)
-            await pilot.click("#create")
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        for ch in "hotpatch":
+            await pilot.press(ch)
+        await pilot.click("#create")
+        await pilot.pause()
 
-            assert client.create_calls == [("main", "hotpatch")]
+        assert client.create_calls == [("main", "hotpatch")]
 
 
 async def test_clicking_cancel_in_new_branch_dialog_creates_no_branch(
     sample_branches: list[BranchInfo],
+    empty_config: Config,
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
-    app = HopApp(sample_branches, client=client)
+    app = HopApp(sample_branches, client=client, config=empty_config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.press("n")
-            await pilot.pause()
-            await pilot.click("#cancel")
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        await pilot.click("#cancel")
+        await pilot.pause()
 
-            assert client.create_calls == []
-            assert not isinstance(app.screen, BranchNameInputScreen)
+        assert client.create_calls == []
+        assert not isinstance(app.screen, BranchNameInputScreen)
 
 
 async def test_create_failure_shows_error_status_and_skips_checkout(
     sample_branches: list[BranchInfo],
+    empty_config: Config,
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     client.create_error = RuntimeError("Branch already exists")
-    app = HopApp(sample_branches, client=client)
+    app = HopApp(sample_branches, client=client, config=empty_config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.press("n")
-            await pilot.pause()
-            for ch in "dupe":
-                await pilot.press(ch)
-            await pilot.press("enter")
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        for ch in "dupe":
+            await pilot.press(ch)
+        await pilot.press("enter")
+        await pilot.pause()
 
-            assert client.checkout_calls == []
-            status = app.query_one("#status", Static)
-            assert "Error: Branch already exists" in str(status.content)
+        assert client.checkout_calls == []
+        status = app.query_one("#status", Static)
+        assert "Error: Branch already exists" in str(status.content)
 
 
 async def test_checkout_failure_after_create_surfaces_error_in_status(
     sample_branches: list[BranchInfo],
+    empty_config: Config,
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
     client.checkout_error = RuntimeError("Checkout failed")
-    app = HopApp(sample_branches, client=client)
+    app = HopApp(sample_branches, client=client, config=empty_config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.press("n")
-            await pilot.pause()
-            for ch in "newone":
-                await pilot.press(ch)
-            await pilot.press("enter")
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        for ch in "newone":
+            await pilot.press(ch)
+        await pilot.press("enter")
+        await pilot.pause()
 
-            assert client.create_calls == [("main", "newone")]
-            status = app.query_one("#status", Static)
-            assert "Error: Checkout failed" in str(status.content)
+        assert client.create_calls == [("main", "newone")]
+        status = app.query_one("#status", Static)
+        assert "Error: Checkout failed" in str(status.content)
 
 
 async def test_pressing_n_on_empty_branch_list_is_a_noop() -> None:
@@ -635,40 +629,38 @@ async def test_pressing_n_on_empty_branch_list_is_a_noop() -> None:
 
 async def test_blank_input_in_new_branch_dialog_keeps_dialog_open(
     sample_branches: list[BranchInfo],
+    empty_config: Config,
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
-    app = HopApp(sample_branches, client=client)
+    app = HopApp(sample_branches, client=client, config=empty_config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.press("n")
-            await pilot.pause()
-            await pilot.press("enter")  # submit empty
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        await pilot.press("enter")  # submit empty
+        await pilot.pause()
 
-            assert isinstance(app.screen, BranchNameInputScreen)
-            assert client.create_calls == []
+        assert isinstance(app.screen, BranchNameInputScreen)
+        assert client.create_calls == []
 
 
 async def test_clicking_create_with_blank_input_keeps_dialog_open(
     sample_branches: list[BranchInfo],
+    empty_config: Config,
 ) -> None:
     client = FakeGitClient(branches=sample_branches)
-    app = HopApp(sample_branches, client=client)
+    app = HopApp(sample_branches, client=client, config=empty_config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="")
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.press("n")
-            await pilot.pause()
-            await pilot.click("#create")
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        await pilot.click("#create")
+        await pilot.pause()
 
-            assert isinstance(app.screen, BranchNameInputScreen)
-            assert client.create_calls == []
+        assert isinstance(app.screen, BranchNameInputScreen)
+        assert client.create_calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -755,14 +747,13 @@ async def test_refresh_failure_shows_error_status(
 async def test_on_mount_applies_theme_from_config(
     sample_branches: list[BranchInfo],
 ) -> None:
-    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+    config = Config(branch_prefixes={}, default_branch_prefix="", theme="light")
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches), config=config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="", theme="light")
-        async with app.run_test() as pilot:
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
 
-            assert app.theme == "textual-light"
+        assert app.theme == "textual-light"
 
 
 async def test_on_mount_resolves_auto_theme_from_hop_theme_env(
@@ -770,52 +761,47 @@ async def test_on_mount_resolves_auto_theme_from_hop_theme_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("HOP_THEME", "nord")
-    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+    config = Config(branch_prefixes={}, default_branch_prefix="", theme="auto")
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches), config=config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="", theme="auto")
-        async with app.run_test() as pilot:
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
 
-            assert app.theme == "nord"
+        assert app.theme == "nord"
 
 
 async def test_pressing_t_toggles_between_dark_and_light(
     sample_branches: list[BranchInfo],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("HOP_THEME", raising=False)
-    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+    config = Config(branch_prefixes={}, default_branch_prefix="", theme="dark")
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches), config=config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="", theme="dark")
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            assert app.theme == "textual-dark"
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.theme == "textual-dark"
 
-            await pilot.press("t")
-            await pilot.pause()
-            assert app.theme == "textual-light"
+        await pilot.press("t")
+        await pilot.pause()
+        assert app.theme == "textual-light"
 
-            await pilot.press("t")
-            await pilot.pause()
-            assert app.theme == "textual-dark"
+        await pilot.press("t")
+        await pilot.pause()
+        assert app.theme == "textual-dark"
 
 
 async def test_toggle_theme_action_reports_new_theme_in_status(
     sample_branches: list[BranchInfo],
 ) -> None:
-    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+    config = Config(branch_prefixes={}, default_branch_prefix="", theme="dark")
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches), config=config)
 
-    with patch("hop.ui.load_config") as mock_config:
-        mock_config.return_value = Mock(branch_prefixes={}, default_branch_prefix="", theme="dark")
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            await pilot.press("t")
-            await pilot.pause()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
 
-            status = app.query_one("#status", Static)
-            assert "textual-light" in str(status.content)
+        status = app.query_one("#status", Static)
+        assert "textual-light" in str(status.content)
 
 
 # ---------------------------------------------------------------------------
