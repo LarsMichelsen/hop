@@ -14,8 +14,9 @@ def get_config_path() -> Path:
     return Path.home() / ".config" / "hop" / "config.toml"
 
 
-def load_config() -> Config:
-    config_path = get_config_path()
+def load_config(config_path: Path | None = None) -> Config:
+    if config_path is None:
+        config_path = get_config_path()
 
     if not config_path.exists():
         return Config(branch_prefixes={}, default_branch_prefix="")
