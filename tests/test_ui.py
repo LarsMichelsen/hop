@@ -770,19 +770,43 @@ async def test_on_mount_resolves_auto_theme_from_hop_theme_env(
         assert app.theme == "nord"
 
 
-async def test_on_mount_applies_textual_ansi_theme(
+async def test_on_mount_applies_terminal_adapting_theme_by_default(
     sample_branches: list[BranchInfo],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """With theme='auto', the app should mount on a terminal-adapting theme."""
     monkeypatch.delenv("HOP_THEME", raising=False)
-    config = Config(branch_prefixes={}, default_branch_prefix="", theme="textual-ansi")
+    config = Config(branch_prefixes={}, default_branch_prefix="", theme="auto")
     app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches), config=config)
 
     async with app.run_test() as pilot:
         await pilot.pause()
 
-        assert app.theme == "textual-ansi"
-        assert "textual-ansi" in app.available_themes
+        assert app.theme in {"ansi-dark", "textual-ansi"}
+        assert app.theme in app.available_themes
+
+
+async def test_on_mount_falls_back_when_resolved_theme_is_not_registered(
+    sample_branches: list[BranchInfo],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Textual's theme catalog changes across versions (e.g. textual-ansi was
+    renamed to ansi-dark in 8.2.5). The app must pick a registered terminal-
+    adapting theme rather than crashing.
+    """
+
+    def fake_resolve(_setting: str, _env: object) -> str:
+        return "not-a-real-theme"
+
+    monkeypatch.setattr("hop.ui.resolve_theme", fake_resolve)
+    config = Config(branch_prefixes={}, default_branch_prefix="", theme="auto")
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches), config=config)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        assert app.theme in app.available_themes
+        assert app.theme in {"ansi-dark", "textual-ansi", "textual-dark"}
 
 
 async def test_pressing_t_toggles_between_dark_and_light(

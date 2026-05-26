@@ -19,7 +19,7 @@ from hop.git import (
     SubprocessGitClient,
     get_current_branch,
 )
-from hop.theme import resolve_theme, toggle_dark_light
+from hop.theme import pick_terminal_fallback, resolve_theme, toggle_dark_light
 
 
 class HelpScreen(ModalScreen[None]):  # type: ignore[misc]
@@ -439,7 +439,14 @@ class HopApp(App[None]):
 
     def on_mount(self) -> None:
         """Apply configured theme and start loading metadata when app is mounted."""
-        self.theme = resolve_theme(self.config.theme, os.environ)
+        resolved = resolve_theme(self.config.theme, os.environ)
+        # Textual's theme catalog varies across versions (e.g. "textual-ansi"
+        # was renamed to "ansi-dark"/"ansi-light" in 8.2.5). If the resolved
+        # name isn't registered here, fall back to the closest terminal-
+        # adapting theme that is — preserving the "auto" intent.
+        if resolved not in self.available_themes:
+            resolved = pick_terminal_fallback(frozenset(self.available_themes))
+        self.theme = resolved
         self.load_metadata()
 
     def action_toggle_theme(self) -> None:

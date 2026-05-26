@@ -4,10 +4,11 @@
 # UI options
 [ui]
 # Theme: "auto" (default — honours $HOP_THEME, otherwise adapts to the
-# terminal's ANSI color palette), "light", "dark", or any built-in Textual
+# terminal's ANSI color palette via "ansi-dark"/"textual-ansi" depending on
+# the installed Textual version), "light", "dark", or any built-in Textual
 # theme name such as "nord", "gruvbox", "dracula", "monokai", "tokyo-night",
 # "catppuccin-mocha", "catppuccin-latte", "solarized-light", "flexoki",
-# "textual-ansi".
+# "ansi-dark", "ansi-light", "textual-ansi".
 theme = "auto"
 
 # Default prefix for branches not specified in [branch_prefixes]

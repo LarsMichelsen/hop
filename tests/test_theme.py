@@ -2,7 +2,7 @@
 
 import pytest
 
-from hop.theme import DEFAULT_THEME, resolve_theme, toggle_dark_light
+from hop.theme import DEFAULT_THEME, pick_terminal_fallback, resolve_theme, toggle_dark_light
 
 
 @pytest.mark.parametrize(
@@ -51,3 +51,21 @@ def test_toggle_dark_light_flips_dark_to_light() -> None:
 def test_toggle_dark_light_flips_anything_else_back_to_dark() -> None:
     assert toggle_dark_light("textual-light") == "textual-dark"
     assert toggle_dark_light("nord") == "textual-dark"
+
+
+def test_pick_terminal_fallback_prefers_ansi_dark_when_available() -> None:
+    assert pick_terminal_fallback(frozenset({"ansi-dark", "textual-ansi", "textual-dark"})) == (
+        "ansi-dark"
+    )
+
+
+def test_pick_terminal_fallback_falls_back_to_textual_ansi_on_older_textual() -> None:
+    assert pick_terminal_fallback(frozenset({"textual-ansi", "textual-dark"})) == "textual-ansi"
+
+
+def test_pick_terminal_fallback_returns_textual_dark_as_last_resort() -> None:
+    assert pick_terminal_fallback(frozenset({"textual-dark", "nord"})) == "textual-dark"
+
+
+def test_pick_terminal_fallback_returns_textual_dark_when_nothing_matches() -> None:
+    assert pick_terminal_fallback(frozenset()) == "textual-dark"
