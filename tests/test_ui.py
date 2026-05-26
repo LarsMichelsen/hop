@@ -770,6 +770,21 @@ async def test_on_mount_resolves_auto_theme_from_hop_theme_env(
         assert app.theme == "nord"
 
 
+async def test_on_mount_applies_textual_ansi_theme(
+    sample_branches: list[BranchInfo],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HOP_THEME", raising=False)
+    config = Config(branch_prefixes={}, default_branch_prefix="", theme="textual-ansi")
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches), config=config)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        assert app.theme == "textual-ansi"
+        assert "textual-ansi" in app.available_themes
+
+
 async def test_pressing_t_toggles_between_dark_and_light(
     sample_branches: list[BranchInfo],
 ) -> None:
