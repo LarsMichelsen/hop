@@ -7,7 +7,7 @@ from typing import ClassVar
 from rich.text import Text
 from textual import events, work
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, VerticalScroll
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Label, Static
 from textual.worker import Worker
@@ -301,6 +301,18 @@ def format_branch_name(branch_name: str, is_current: bool) -> Text | str:
     return branch_name
 
 
+def format_status_message(message: str) -> Text | str:
+    """Colour an ``Error…:`` label red so failures stand out in the status bar.
+
+    Covers both ``Error: …`` and ``Error refreshing branches: …``; any other
+    message is returned unchanged.
+    """
+    if message.startswith("Error") and ":" in message:
+        label, rest = message.split(":", 1)
+        return Text.assemble((f"{label}:", "bold red"), rest)
+    return message
+
+
 class BranchList(DataTable):  # type: ignore[misc]
     """Widget to display the list of branches."""
 
@@ -400,24 +412,28 @@ class HopApp(App[None]):
         text-style: $block-cursor-text-style;
     }
 
+    /* Status and controls each get their own full-width row so a long status
+       message (e.g. a multi-line git error) wraps and stays fully visible
+       instead of being clipped by sharing one line with the controls. */
     #footer-container {
         dock: bottom;
-        height: 1;
+        height: auto;
         background: $boost;
     }
 
     #status {
-        width: 1fr;
-        height: 1;
+        width: 100%;
+        height: auto;
         background: $boost;
         padding: 0 1;
     }
 
     #controls {
-        width: auto;
+        width: 100%;
         height: 1;
         background: $boost;
         padding: 0 1;
+        text-align: right;
     }
     """
 
@@ -449,7 +465,7 @@ class HopApp(App[None]):
     def compose(self) -> ComposeResult:
         """Compose the UI."""
         yield BranchList(self.branches)
-        with Horizontal(id="footer-container"):
+        with Vertical(id="footer-container"):
             yield Static("Ready", id="status")
             yield Static(
                 "[underline]c[/]heckout  [underline]r[/]ebase  "
@@ -716,9 +732,9 @@ class HopApp(App[None]):
             self.show_status(f"Error refreshing branches: {e}")
 
     def show_status(self, message: str) -> None:
-        """Show a status message."""
+        """Show a status message, with any ``Error…:`` label highlighted."""
         status = self.query_one("#status", Static)
-        status.update(message)
+        status.update(format_status_message(message))
 
 
 def run_interactive_ui(branches: list[BranchInfo], client: GitClient | None = None) -> None:

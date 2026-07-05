@@ -19,6 +19,7 @@ from hop.ui import (
     delete_warning_message,
     format_branch_name,
     format_status,
+    format_status_message,
     run_interactive_ui,
 )
 from tests.fakes import FakeGitClient
@@ -111,6 +112,27 @@ def test_format_status_renders_loading_marker_dimmed() -> None:
 
     assert status.plain == "--"
     assert str(status.style) == "dim"
+
+
+def test_format_status_message_colorizes_the_error_label() -> None:
+    result = format_status_message("Error: something broke")
+
+    assert isinstance(result, Text)
+    assert result.plain == "Error: something broke"
+    red = next(s for s in result.spans if "red" in str(s.style))
+    assert result.plain[red.start : red.end] == "Error:"
+
+
+def test_format_status_message_colorizes_a_multiword_error_label() -> None:
+    result = format_status_message("Error refreshing branches: git unavailable")
+
+    assert isinstance(result, Text)
+    red = next(s for s in result.spans if "red" in str(s.style))
+    assert result.plain[red.start : red.end] == "Error refreshing branches:"
+
+
+def test_format_status_message_leaves_non_error_messages_unstyled() -> None:
+    assert format_status_message("Checked out branch: main") == "Checked out branch: main"
 
 
 # ---------------------------------------------------------------------------
@@ -871,6 +893,38 @@ async def test_toggle_theme_action_reports_new_theme_in_status(
 
         status = app.query_one("#status", Static)
         assert "textual-light" in str(status.content)
+
+
+# ---------------------------------------------------------------------------
+# Status footer layout
+# ---------------------------------------------------------------------------
+
+
+async def test_long_status_message_uses_full_width_and_wraps_in_small_terminal(
+    sample_branches: list[BranchInfo],
+    empty_config: Config,
+) -> None:
+    # Git errors are often wider than the terminal; the status line must span
+    # the full width and wrap so the whole message stays visible instead of
+    # being clipped by sharing a single row with the controls hint.
+    client = FakeGitClient(branches=sample_branches)
+    client.create_error = RuntimeError(
+        "failed to create branch: fatal: 'aaaaaaaaaaaaaaaaaaaaaaaa' is not a valid branch name"
+    )
+    app = HopApp(sample_branches, client=client, config=empty_config)
+
+    async with app.run_test(size=(60, 24)) as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        for ch in "dupe":
+            await pilot.press(ch)
+        await pilot.press("enter")
+        await pilot.pause()
+
+        status = app.query_one("#status", Static)
+        assert status.region.width == app.size.width
+        assert status.region.height > 1
 
 
 # ---------------------------------------------------------------------------
