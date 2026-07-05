@@ -8,6 +8,10 @@ When you live in short-lived feature branches, switching between them with `git 
 remembering names and typing them out. `hop` shows the branches you've touched most recently at the
 top, so the one you want is almost always a keystroke away.
 
+![hop demo](demo/demo.gif)
+
+<sub>Recorded from a reproducible synthetic repo — see [`demo/PLAYBOOK.md`](demo/PLAYBOOK.md).</sub>
+
 ## Features
 
 - Interactive text-based UI for browsing git branches
