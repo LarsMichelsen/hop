@@ -41,7 +41,7 @@ BADGES: list[tuple[str, str, float, float]] = [
 F = 30  # font size, px
 CW = F * 0.602  # DejaVu Sans Mono advance width per glyph
 SEP = "→"
-SEP_DY = round(F * 0.16)  # the arrow's glyph centre sits high; nudge it down onto the text
+SEP_DY = round(F * 0.20)  # the arrow's ink centre sits ~0.2em above the text; nudge it down
 KP, KVP = 14, 8  # keycap inner padding (x, y)
 GAP = 16  # gap between keycap / arrow / action
 BPX, BPY = 22, 12  # pill inner padding (x, y)
@@ -130,7 +130,7 @@ def main() -> None:
             "-map",
             "[v]",
             "-loop",
-            "0",
+            "-1",  # play once and freeze on the final frame, so the end is obvious
             str(tmp),
         ],
         check=True,
