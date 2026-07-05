@@ -95,6 +95,34 @@ Status Indicators:
         self.dismiss()
 
 
+def delete_warning_message(track_status: str, is_merged: bool) -> str:
+    """Caution text for the delete dialog, or "" when deletion is safe.
+
+    ASCII-only on purpose: terminals render emoji such as ⚠️ as two cells while
+    Rich measures them as one, which shifts the dialog's right border. Emphasis
+    is applied with a text style in the UI instead (see ConfirmDeleteScreen).
+    """
+    if not is_merged:
+        message = "This branch is NOT fully merged to upstream."
+        if track_status == ">":
+            message += "\nIt has unpushed commits that will be lost."
+        elif track_status == "<>":
+            message += "\nIt has diverged from upstream."
+        elif not track_status:
+            message += "\nIt has no upstream configured."
+        return message
+
+    if track_status == ">":
+        return "This branch has unpushed commits (but is merged to upstream)."
+    if track_status == "<":
+        return "This branch is behind upstream."
+    if track_status == "<>":
+        return "This branch has diverged from upstream."
+    if not track_status:
+        return "This branch has no upstream configured."
+    return ""
+
+
 class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
     """Modal screen for confirming branch deletion."""
 
@@ -136,33 +164,18 @@ class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
 
     def compose(self) -> ComposeResult:
         """Compose the confirmation dialog."""
-        status_msg = ""
-
-        # Show warning based on merge status and track status
-        if not self.is_merged:
-            status_msg = "\n⚠️  This branch is NOT fully merged to upstream."
-            if self.track_status == ">":
-                status_msg += "\nIt has unpushed commits that will be lost."
-            elif self.track_status == "<>":
-                status_msg += "\nIt has diverged from upstream."
-            elif not self.track_status:
-                status_msg += "\nIt has no upstream configured."
-        else:
-            # Branch is merged
-            if self.track_status == ">":
-                status_msg = "\nThis branch has unpushed commits (but is merged to upstream)."
-            elif self.track_status == "<":
-                status_msg = "\nThis branch is behind upstream."
-            elif self.track_status == "<>":
-                status_msg = "\nThis branch has diverged from upstream."
-            elif not self.track_status:
-                status_msg = "\nThis branch has no upstream configured."
+        # Build the message as a Rich Text so the warning can be highlighted
+        # (bold + color) without markup parsing of the branch name and without
+        # changing cell widths — styling keeps the dialog border aligned.
+        message = Text(f"Delete branch '{self.branch_name}'?")
+        warning = delete_warning_message(self.track_status, self.is_merged)
+        if warning:
+            # Red for the dangerous not-merged case, amber for merged-but-unsynced.
+            message.append("\n")
+            message.append(warning, style="bold red" if not self.is_merged else "bold yellow")
 
         with Container(id="confirm-dialog"):
-            yield Label(
-                f"Delete branch '{self.branch_name}'?{status_msg}",
-                id="confirm-message",
-            )
+            yield Label(message, id="confirm-message")
             with Horizontal(id="button-container"):
                 yield Button("Delete", variant="error", id="confirm")
                 yield Button("Cancel", variant="primary", id="cancel")

@@ -4,6 +4,7 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 import pytest
+from rich.cells import cell_len
 from rich.text import Text
 from textual.widgets import Label, Static
 
@@ -15,6 +16,7 @@ from hop.ui import (
     ConfirmDeleteScreen,
     HelpScreen,
     HopApp,
+    delete_warning_message,
     format_branch_name,
     format_status,
     run_interactive_ui,
@@ -456,6 +458,34 @@ async def test_confirm_delete_screen_warns_about_branch_state(
         assert isinstance(app.screen, ConfirmDeleteScreen)
         label = app.screen.query_one("#confirm-message", Label)
         assert expected_phrase in str(label.content)
+
+
+@pytest.mark.parametrize("is_merged", [True, False])
+@pytest.mark.parametrize("track_status", ["", "<", ">", "<>", "="])
+def test_delete_warning_uses_only_unambiguous_width_characters(
+    track_status: str, is_merged: bool
+) -> None:
+    # Emoji like ⚠️ render as two cells but Rich measures them as one, which
+    # shifts the dialog's right border. Guard that every line's Rich cell width
+    # equals its length so the border stays aligned.
+    for line in delete_warning_message(track_status, is_merged).splitlines():
+        assert cell_len(line) == len(line)
+
+
+def test_delete_warning_is_empty_for_a_synced_merged_branch() -> None:
+    assert delete_warning_message("=", is_merged=True) == ""
+
+
+async def test_confirm_delete_screen_highlights_the_warning() -> None:
+    app = HopApp([], client=FakeGitClient(branches=[]))
+
+    async with app.run_test() as pilot:
+        app.push_screen(ConfirmDeleteScreen("feature", "", is_merged=False))
+        await pilot.pause()
+
+        content = app.screen.query_one("#confirm-message", Label).content
+        assert isinstance(content, Text)
+        assert any("bold" in str(span.style) for span in content.spans)
 
 
 # ---------------------------------------------------------------------------
