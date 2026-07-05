@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Local deployment: install hop globally as an isolated uv-managed tool. The
+# `hop` command then lives on PATH (uv's tool bin, e.g. ~/.local/bin),
+# independent of whatever Python / pyenv environment is active.
+set -euo pipefail
+
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# --editable: the installed tool tracks this working tree.
+# --force:    redeploy over any existing install when this script is re-run.
+uv tool install --force --editable .
+
+if command -v hop >/dev/null 2>&1; then
+    hop --version
+else
+    echo "Installed. Add uv's tool bin to PATH if 'hop' is not found: uv tool update-shell"
+fi
