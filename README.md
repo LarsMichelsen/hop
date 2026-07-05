@@ -17,14 +17,16 @@ top, so the one you want is almost always a keystroke away.
 
 ## Installation
 
-Requires Python 3.12 or newer.
+Requires Python 3.12 or newer. Installation via `uv` recommended (isolated, added to PATH):
 
 ```bash
-# As a standalone CLI tool
-uv tool install .
+uv tool install git+https://github.com/LarsMichelsen/hop.git
+```
 
-# Or with pip
-pip install .
+## Updating
+
+```bash
+uv tool upgrade hop
 ```
 
 ## Usage
@@ -56,3 +58,7 @@ uv run hop
 ```
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow and pre-commit checks.
+
+## License
+
+[Apache License 2.0](LICENSE.md) © Lars Michelsen
