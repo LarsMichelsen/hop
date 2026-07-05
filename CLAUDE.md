@@ -98,6 +98,21 @@ Only add docstrings when explaining:
 - Complex business logic
 - Edge cases that aren't clear from code
 
+## Testing Guidelines
+
+**IMPORTANT:** When writing or changing tests, follow the project testing
+guidelines. Read the relevant one before adding tests and keep new tests
+consistent with it:
+
+- `docs/TESTING.md` — principles: what earns a test, picking the level,
+  testing through the public surface, doubles vs. dependency injection, and the
+  shape of a single test.
+- `docs/PYTEST.md` — how those principles look in pytest: behavior-based
+  naming, Arrange-Act-Assert, stubs/mocks/fakes, `parametrize`, one behavior per
+  test.
+- `docs/TEST_CLASSIFICATION.md` — test classification and architecture (unit,
+  component, integration, system/E2E) and where each kind belongs.
+
 ## Documentation
 
 Full workflow documentation: `docs/DEVELOPMENT.md`
