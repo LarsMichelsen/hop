@@ -47,6 +47,44 @@ hop --version  # print the version and exit
 - `h` - Show help screen
 - `q` - Quit
 
+## Configuration
+
+`hop` reads an optional TOML file at `~/.config/hop/config.toml`. Everything in
+it is optional. An absent file, section, or key falls back to the defaults
+shown below. Create a documented starting point with:
+
+```bash
+hop --init-config          # write ~/.config/hop/config.toml
+hop --init-config --force  # overwrite an existing file
+```
+
+```toml
+[ui]
+# Color theme. "auto" (default) honours $HOP_THEME, otherwise adapts to the
+# terminal's ANSI palette. Also accepts "light", "dark", or any built-in
+# Textual theme, e.g. "nord", "gruvbox", "dracula", "monokai", "tokyo-night",
+# "catppuccin-mocha", "catppuccin-latte", "solarized-light", "flexoki".
+theme = "auto"
+
+[defaults]
+# Prefix pre-filled in the "new branch" dialog when the source branch has no
+# entry in [branch_prefixes].
+branch_prefix = ""
+
+[branch_prefixes]
+# Per-source-branch prefixes: creating a branch from one of these pre-fills the
+# input with the mapped prefix. Quote names containing slashes.
+main = "feature/"
+develop = "feat/"
+# "release/v1.0" = "bugfix/"
+```
+
+| Setting | Purpose |
+| --- | --- |
+| `[ui] theme` | Color theme; `"auto"` adapts to the terminal. Toggle light/dark at runtime with `t`. |
+| `[defaults] branch_prefix` | Default prefix for new branch names. |
+| `[branch_prefixes]` | Prefix overrides keyed by the source branch you create from. |
+
 ## Development
 
 ```bash
