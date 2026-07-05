@@ -29,12 +29,12 @@ GIF = Path("demo/demo.gif")
 
 # (key, action, start_s, end_s) — one badge per hop key press, in storyline order.
 BADGES: list[tuple[str, str, float, float]] = [
-    ("n", "new branch", 3.2, 4.6),
-    ("Enter", "create", 6.7, 8.2),
-    ("q", "quit", 9.1, 10.3),
-    ("↓", "move down", 24.1, 25.4),
-    ("c", "checkout", 25.7, 27.2),
-    ("q", "quit", 27.6, 28.9),
+    ("n", "new branch", 3.6, 4.9),
+    ("Enter", "create", 6.9, 8.3),
+    ("q", "quit", 9.2, 10.6),
+    ("↓", "move down", 25.3, 26.4),
+    ("c", "checkout", 26.5, 27.9),
+    ("q", "quit", 28.9, 30.4),
 ]
 
 # --- keycap HUD look (tokyo-night-ish palette) ---
