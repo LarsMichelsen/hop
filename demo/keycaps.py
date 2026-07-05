@@ -52,8 +52,8 @@ BOTTOM_MARGIN = 64
 # Solarized Dark palette, to match the terminal theme in demo.tape.
 BAR_BG = "0x073642@0.92"  # base02 panel
 ACCENT = "0x268bd2"  # blue — pill border + arrow
-KEYCAP_BG = "0xeee8d5"  # base2 — the light "keycap"
-KEYCAP_EDGE = "0x002b36"  # base03 — keycap border + key glyph
+KEYCAP_BG = "0x002b36"  # base03 — dark keycap, matching the terminal
+KEYCAP_EDGE = "0x839496"  # base0 (font color) — keycap border + key glyph
 ACTION_FG = "0x93a1a1"  # base1
 
 _FONT_DIRS = [
