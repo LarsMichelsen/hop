@@ -34,7 +34,7 @@ class HelpScreen(ModalScreen[None]):  # type: ignore[misc]
     #help-dialog {
         width: 60;
         height: 20;
-        border: thick $background 80%;
+        border: round $primary;
         background: $surface;
         padding: 1 2;
     }
@@ -135,7 +135,7 @@ class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
     #confirm-dialog {
         width: 60;
         height: 11;
-        border: thick $background 80%;
+        border: round $primary;
         background: $surface;
         padding: 1 2;
     }
@@ -202,7 +202,7 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
     #input-dialog {
         width: 60;
         height: auto;
-        border: thick $background 80%;
+        border: round $primary;
         background: $surface;
         padding: 1 2;
     }
@@ -217,6 +217,11 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
     #input-field {
         width: 100%;
         margin-bottom: 1;
+    }
+
+    /* Distinct focus color for the active input, instead of the theme default. */
+    #input-field:focus {
+        border: tall $success;
     }
 
     /* Reserves its own line (blank when the name is valid) so the dialog does
@@ -328,7 +333,7 @@ def format_branch_name(branch_name: str, is_current: bool) -> Text | str:
     base tone) so the highlight stays green across terminal themes.
     """
     if is_current:
-        return Text(f"● {branch_name}", style="bold green")
+        return Text(f"▸ {branch_name}", style="bold green")
     return branch_name
 
 
