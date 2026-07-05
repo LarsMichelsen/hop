@@ -49,11 +49,12 @@ KEYCAP_H = F + 2 * KVP
 BAR_H = KEYCAP_H + 2 * BPY
 BOTTOM_MARGIN = 64
 
-BAR_BG = "0x1a1b26@0.85"
-ACCENT = "0x7aa2f7"  # pill border + arrow
-KEYCAP_BG = "0xe8e8ec"
-KEYCAP_EDGE = "0x11121a"
-ACTION_FG = "0xc0caf5"
+# Solarized Dark palette, to match the terminal theme in demo.tape.
+BAR_BG = "0x073642@0.92"  # base02 panel
+ACCENT = "0x268bd2"  # blue — pill border + arrow
+KEYCAP_BG = "0xeee8d5"  # base2 — the light "keycap"
+KEYCAP_EDGE = "0x002b36"  # base03 — keycap border + key glyph
+ACTION_FG = "0x93a1a1"  # base1
 
 _FONT_DIRS = [
     Path("/usr/share/fonts/truetype/dejavu"),
