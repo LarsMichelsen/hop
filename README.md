@@ -1,5 +1,7 @@
 # hop
 
+[![CI](https://github.com/LarsMichelsen/hop/actions/workflows/ci.yml/badge.svg)](https://github.com/LarsMichelsen/hop/actions/workflows/ci.yml)
+
 Helper for quick git branch hopping.
 
 When you live in short-lived feature branches, switching between them with `git checkout` means
