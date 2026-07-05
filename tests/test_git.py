@@ -1,6 +1,8 @@
 """Tests for git module."""
 
+import subprocess
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -39,7 +41,23 @@ def test_get_current_branch_raises_when_git_rev_parse_fails() -> None:
         get_current_branch()
 
 
-def test_get_branches_fast_returns_branches_sorted_by_creator_date_descending() -> None:
+def test_get_branches_fast_returns_branches_sorted_by_creator_date_descending(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Build an isolated repo with known branches instead of reading the ambient
+    # checkout: CI's pull_request checkout is a detached HEAD with no local
+    # branches, so `git for-each-ref refs/heads/` would be empty there.
+    git = ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test"]
+    subprocess.run([*git, "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        [*git, "commit", "--allow-empty", "-m", "init"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run([*git, "branch", "feature"], cwd=tmp_path, check=True, capture_output=True)
+    monkeypatch.chdir(tmp_path)
+
     branches = get_branches_fast()
 
     assert len(branches) > 0
