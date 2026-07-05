@@ -1,7 +1,10 @@
-# hop demo — regenerate with:  vhs demo/demo.tape   (needs `vhs` and `hop` on PATH)
+# hop demo — regenerate with:  vhs demo/demo.tape && uv run python demo/keycaps.py
+# (needs `vhs`, `ttyd`, `ffmpeg` and `hop` on PATH). Run from the repository root.
 #
 # The storyline is specified in demo/PLAYBOOK.md; keep this tape in sync with it.
-# Run from the repository root.
+# vhs writes the base recording; demo/keycaps.py overlays the key-press badges.
+# The Sleep budget below is deterministic on purpose so the badge timings in
+# keycaps.py stay valid across re-renders — if you change a Sleep, re-measure.
 
 Output demo/demo.gif
 
@@ -14,45 +17,58 @@ Set Height 640
 Set Padding 16
 Set TypingSpeed 90ms
 
-# --- setup (hidden): isolated HOME + clean prompt, build the synthetic repo,
-#     start on main ------------------------------------------------------------
+# --- setup (hidden): isolated HOME, a prompt that shows the current branch, and
+#     the synthetic repo; start on main -----------------------------------------
 Hide
-Type "export HOME=$(mktemp -d); export PS1='demo$ '; clear" Enter
+Type "export HOME=$(mktemp -d); export PROMPT_COMMAND='b=$(git branch --show-current 2>/dev/null)'; export PS1='demo ${b:+($b) }$ '; clear" Enter
 Type "python3 demo/make_repo.py /tmp/hop-demo >/dev/null && cd /tmp/hop-demo && clear" Enter
+# Stay hidden until make_repo finishes and its `clear` runs — otherwise Show
+# reveals the still-running setup command before the screen clears. Hidden time
+# is not recorded, so this does not lengthen the GIF.
+Sleep 3s
 Show
 
-# terminal is on main
-Type "git branch --show-current" Enter
-Sleep 1.2s
+# the prompt already shows the branch — (main) — so no `git branch` needed
+Sleep 1.5s
 
-# launch hop and create a new branch off main (the top row), then check it out
+# launch hop; main is the top row, so it starts selected
 Type "hop" Enter
 Sleep 2s
+
+# press n -> the "Create new branch from 'main'" dialog opens
 Type "n"
-Sleep 1s
-Type "feature/quick-fix"
-Sleep 800ms
-Enter
-Sleep 2s
-Type "q"
 Sleep 1.2s
 
-# back in the terminal on feature/quick-fix — make a small commit
+# type the branch name
+Type "feature/quick-fix"
+Sleep 800ms
+
+# Enter -> hop creates + checks out the branch; hold on the footer status
+Enter
+Sleep 2.5s
+
+# quit hop; the prompt now reads (feature/quick-fix)
+Type "q"
+Sleep 2s
+
+# make a small commit on the new branch
 Type "echo 'tweak the footer layout' >> notes.md" Enter
 Sleep 500ms
 Type "git add notes.md && git commit -m 'Jot down a quick fix'" Enter
 Sleep 2s
 
-# launch hop again and hop back to main (now one row down)
+# launch hop again; feature/quick-fix is now the top row, main one row below
 Type "hop" Enter
 Sleep 2s
+
+# press Down to move the cursor from feature/quick-fix to main
 Down
-Sleep 800ms
-Type "c"
-Sleep 2s
-Type "q"
 Sleep 1.2s
 
-# terminal is back on main
-Type "git branch --show-current" Enter
+# press c to check out main; hold on the "Checked out branch: main" status
+Type "c"
+Sleep 2.5s
+
+# quit; the prompt reads (main) again
+Type "q"
 Sleep 2s
