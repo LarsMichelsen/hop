@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from hop import __version__
+from hop.config import get_example_config
 from hop.main import main
 
 
@@ -60,3 +61,41 @@ def test_help_flag_prints_usage_and_exits_zero(
 
     assert exc.value.code == 0
     assert "usage: hop" in capsys.readouterr().out
+
+
+def test_init_config_writes_example_to_default_location(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    main(["--init-config"])
+
+    written = tmp_path / ".config" / "hop" / "config.toml"
+    assert written.read_text(encoding="utf-8") == get_example_config()
+    assert "Wrote example config" in capsys.readouterr().out
+
+
+def test_init_config_refuses_to_overwrite_existing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    main(["--init-config"])
+
+    with pytest.raises(SystemExit) as exc:
+        main(["--init-config"])
+
+    assert exc.value.code == 1
+    assert "already exists" in capsys.readouterr().err
+
+
+def test_init_config_force_overwrites_existing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    written = tmp_path / ".config" / "hop" / "config.toml"
+    written.parent.mkdir(parents=True)
+    written.write_text("stale")
+
+    main(["--init-config", "--force"])
+
+    assert written.read_text(encoding="utf-8") == get_example_config()

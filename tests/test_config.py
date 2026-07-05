@@ -1,6 +1,15 @@
 from pathlib import Path
 
-from hop.config import Config, get_config_path, get_prefix_for_branch, load_config
+import pytest
+
+from hop.config import (
+    Config,
+    get_config_path,
+    get_example_config,
+    get_prefix_for_branch,
+    install_example_config,
+    load_config,
+)
 
 
 def test_get_config_path_points_at_xdg_config_hop_dir() -> None:
@@ -139,6 +148,42 @@ branch_prefix = "feat/"
     config = load_config(config_file)
 
     assert config.theme == "auto"
+
+
+def test_get_example_config_contains_documented_sections() -> None:
+    text = get_example_config()
+
+    assert "[ui]" in text
+    assert "[branch_prefixes]" in text
+    assert 'theme = "auto"' in text
+
+
+def test_install_example_config_writes_bundled_example_when_absent(tmp_path: Path) -> None:
+    target = tmp_path / "nested" / "config.toml"
+
+    written = install_example_config(target)
+
+    assert written == target
+    assert target.read_text(encoding="utf-8") == get_example_config()
+
+
+def test_install_example_config_refuses_to_overwrite_without_force(tmp_path: Path) -> None:
+    target = tmp_path / "config.toml"
+    target.write_text("keep me")
+
+    with pytest.raises(FileExistsError):
+        install_example_config(target)
+
+    assert target.read_text() == "keep me"
+
+
+def test_install_example_config_overwrites_with_force(tmp_path: Path) -> None:
+    target = tmp_path / "config.toml"
+    target.write_text("old contents")
+
+    install_example_config(target, force=True)
+
+    assert target.read_text(encoding="utf-8") == get_example_config()
 
 
 def test_load_config_preserves_quoted_branch_keys_with_special_characters(tmp_path: Path) -> None:

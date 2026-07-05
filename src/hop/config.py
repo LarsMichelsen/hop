@@ -1,5 +1,6 @@
 import tomllib
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
 
 
@@ -12,6 +13,28 @@ class Config:
 
 def get_config_path() -> Path:
     return Path.home() / ".config" / "hop" / "config.toml"
+
+
+def get_example_config() -> str:
+    """Return the bundled example config that ships inside the package."""
+    return (files("hop") / "config.toml.example").read_text(encoding="utf-8")
+
+
+def install_example_config(config_path: Path | None = None, *, force: bool = False) -> Path:
+    """Write the bundled example config to ``config_path``.
+
+    Refuses to clobber an existing file unless ``force`` is set, raising
+    ``FileExistsError`` so callers can surface a clear message.
+    """
+    if config_path is None:
+        config_path = get_config_path()
+
+    if config_path.exists() and not force:
+        raise FileExistsError(config_path)
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(get_example_config(), encoding="utf-8")
+    return config_path
 
 
 def load_config(config_path: Path | None = None) -> Config:
