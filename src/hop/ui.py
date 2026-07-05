@@ -327,13 +327,13 @@ def format_status(branch: BranchInfo) -> Text:
 
 
 def format_branch_name(branch_name: str, is_current: bool) -> Text | str:
-    """Highlight the current branch: a green ``●`` marker and a bold green name.
+    """Highlight the current branch: a green ``*`` marker and a bold green name.
 
     Uses plain ``green`` (not ``bright_green``, which Solarized remaps to a grey
     base tone) so the highlight stays green across terminal themes.
     """
     if is_current:
-        return Text(f"▸ {branch_name}", style="bold green")
+        return Text(f"* {branch_name}", style="bold green")
     return branch_name
 
 

@@ -74,7 +74,7 @@ def test_format_branch_name_highlights_current_branch_in_bold_green() -> None:
     result = format_branch_name("main", is_current=True)
 
     assert isinstance(result, Text)
-    assert result.plain == "▸ main"
+    assert result.plain == "* main"
     assert "green" in str(result.style)
 
 
