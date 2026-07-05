@@ -17,7 +17,7 @@ def test_main_exits_when_branch_listing_raises_runtime_error(
     client.get_branches_error = RuntimeError("Git error")
 
     with pytest.raises(SystemExit) as exc_info:
-        main(client=client)
+        main([], client=client)
 
     assert exc_info.value.code == 1
     assert "Git error" in capsys.readouterr().err
@@ -40,7 +40,7 @@ def test_main_exits_when_interactive_ui_raises(
         patch("hop.main.run_interactive_ui", side_effect=Exception("UI error")),
         pytest.raises(SystemExit) as exc_info,
     ):
-        main(client=client)
+        main([], client=client)
 
     assert exc_info.value.code == 1
     assert "UI error" in capsys.readouterr().err

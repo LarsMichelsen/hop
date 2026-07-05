@@ -30,7 +30,9 @@ pip install .
 ## Usage
 
 ```bash
-hop
+hop            # launch the interactive branch browser
+hop --help     # show usage and exit
+hop --version  # print the version and exit
 ```
 
 ### Controls

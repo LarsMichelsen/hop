@@ -1,12 +1,27 @@
 """Main entry point for hop."""
 
+import argparse
 import sys
 
+from hop import __version__
 from hop.git import GitClient, SubprocessGitClient
 from hop.ui import run_interactive_ui
 
 
-def main(client: GitClient | None = None) -> None:
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="hop",
+        description="Helper for quick git branch hopping.",
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None, client: GitClient | None = None) -> None:
+    # --help / --version are handled here by argparse, which exits before we
+    # touch git — so they work outside a repository too.
+    _parse_args(argv)
+
     if client is None:
         client = SubprocessGitClient()
 
