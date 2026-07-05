@@ -17,6 +17,44 @@ class BranchInfo:
     is_loading: bool = True
 
 
+_FORBIDDEN_BRANCH_CHARS = " \t~^:?*[\\"
+
+
+def validate_branch_name(name: str) -> str | None:
+    """Return why ``name`` is not a valid git branch name, or None if it is.
+
+    Mirrors the ``git check-ref-format`` rules that apply to branch names so the
+    new-branch dialog can flag mistakes before shelling out to git. Messages are
+    kept short for inline display.
+    """
+    if not name:
+        return "Enter a branch name"
+    if name.startswith("-"):
+        return "Cannot start with '-'"
+    if name.startswith("/") or name.endswith("/"):
+        return "Cannot start or end with '/'"
+    if name.endswith("."):
+        return "Cannot end with '.'"
+    if name == "@":
+        return "Cannot be '@'"
+    if ".." in name:
+        return "Cannot contain '..'"
+    if "//" in name:
+        return "Cannot contain '//'"
+    if "@{" in name:
+        return "Cannot contain '@{'"
+    for char in name:
+        if char in _FORBIDDEN_BRANCH_CHARS or ord(char) < 0x20 or ord(char) == 0x7F:
+            shown = "a space" if char == " " else f"'{char}'"
+            return f"Cannot contain {shown}"
+    for component in name.split("/"):
+        if component.startswith("."):
+            return "Path components cannot start with '.'"
+        if component.endswith(".lock"):
+            return "Cannot end with '.lock'"
+    return None
+
+
 class GitClient(Protocol):
     """Boundary between hop and the local git installation.
 

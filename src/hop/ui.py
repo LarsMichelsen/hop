@@ -18,6 +18,7 @@ from hop.git import (
     GitClient,
     SubprocessGitClient,
     get_current_branch,
+    validate_branch_name,
 )
 from hop.theme import pick_terminal_fallback, resolve_theme, toggle_dark_light
 
@@ -216,6 +217,15 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
         margin-bottom: 1;
     }
 
+    /* Collapses to nothing while the name is valid, so the dialog keeps its
+       shape; shows the reason in the theme's error color otherwise. */
+    #input-hint {
+        width: 100%;
+        height: auto;
+        content-align: center middle;
+        color: $error;
+    }
+
     #input-button-container {
         width: 100%;
         height: auto;
@@ -241,34 +251,47 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
                 placeholder="Enter branch name...",
                 id="input-field",
             )
+            yield Label("", id="input-hint")
             with Horizontal(id="input-button-container"):
                 yield Button("Create", variant="primary", id="create")
                 yield Button("Cancel", id="cancel")
 
     def on_mount(self) -> None:
-        """Focus the input field when mounted."""
+        """Focus the input field and set the initial validation state."""
         input_field = self.query_one(Input)
         input_field.focus()
         input_field.cursor_position = len(input_field.value)
+        self._refresh_validity(input_field.value)
+
+    def _refresh_validity(self, value: str) -> bool:
+        """Update the hint and Create button for ``value``; return whether valid.
+
+        The pre-filled prefix (e.g. ``feature/``) is not yet a usable name, so
+        keep quiet about it until the user has typed something.
+        """
+        error = validate_branch_name(value)
+        untouched = value in ("", self.prefix)
+        self.query_one("#input-hint", Label).update("" if untouched else error or "")
+        self.query_one("#create", Button).disabled = error is not None
+        return error is None
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Validate on every keystroke for immediate feedback."""
+        self._refresh_validity(event.value)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press."""
         if event.button.id == "create":
             input_field = self.query_one(Input)
-            branch_name = input_field.value.strip()
-            if branch_name:
-                self.dismiss(branch_name)
-            else:
-                # Don't dismiss if empty - show feedback
-                input_field.focus()
+            if self._refresh_validity(input_field.value):
+                self.dismiss(input_field.value)
         else:
             self.dismiss(None)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle Enter key in input field."""
-        branch_name = event.value.strip()
-        if branch_name:
-            self.dismiss(branch_name)
+        if self._refresh_validity(event.value):
+            self.dismiss(event.value)
 
 
 def format_status(branch: BranchInfo) -> Text:
@@ -305,8 +328,10 @@ def format_status_message(message: str) -> Text | str:
     """Colour an ``Error…:`` label red so failures stand out in the status bar.
 
     Covers both ``Error: …`` and ``Error refreshing branches: …``; any other
-    message is returned unchanged.
+    message is returned unchanged. Trailing whitespace (git errors often end in
+    a newline) is trimmed so it does not leave blank lines in the footer.
     """
+    message = message.rstrip()
     if message.startswith("Error") and ":" in message:
         label, rest = message.split(":", 1)
         return Text.assemble((f"{label}:", "bold red"), rest)

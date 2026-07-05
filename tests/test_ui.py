@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 from rich.cells import cell_len
 from rich.text import Text
-from textual.widgets import Label, Static
+from textual.widgets import Button, Label, Static
 
 from hop.config import Config
 from hop.git import BranchInfo
@@ -133,6 +133,14 @@ def test_format_status_message_colorizes_a_multiword_error_label() -> None:
 
 def test_format_status_message_leaves_non_error_messages_unstyled() -> None:
     assert format_status_message("Checked out branch: main") == "Checked out branch: main"
+
+
+def test_format_status_message_strips_trailing_whitespace() -> None:
+    # Git errors often end in a newline; it must not leave blank lines behind.
+    result = format_status_message("Error: not a valid branch name\n\n")
+
+    assert isinstance(result, Text)
+    assert result.plain == "Error: not a valid branch name"
 
 
 # ---------------------------------------------------------------------------
@@ -665,6 +673,67 @@ async def test_checkout_failure_after_create_surfaces_error_in_status(
         assert client.create_calls == [("main", "newone")]
         status = app.query_one("#status", Static)
         assert "Error: Checkout failed" in str(status.content)
+
+
+async def test_new_branch_dialog_flags_an_invalid_name_and_disables_create(
+    sample_branches: list[BranchInfo],
+    empty_config: Config,
+) -> None:
+    app = HopApp(
+        sample_branches, client=FakeGitClient(branches=sample_branches), config=empty_config
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        for ch in "bad name":
+            await pilot.press(ch)
+        await pilot.pause()
+
+        assert isinstance(app.screen, BranchNameInputScreen)
+        assert "space" in str(app.screen.query_one("#input-hint", Label).content)
+        assert app.screen.query_one("#create", Button).disabled is True
+
+
+async def test_new_branch_dialog_clears_hint_and_enables_create_for_a_valid_name(
+    sample_branches: list[BranchInfo],
+    empty_config: Config,
+) -> None:
+    app = HopApp(
+        sample_branches, client=FakeGitClient(branches=sample_branches), config=empty_config
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        for ch in "valid-name":
+            await pilot.press(ch)
+        await pilot.pause()
+
+        assert str(app.screen.query_one("#input-hint", Label).content) == ""
+        assert app.screen.query_one("#create", Button).disabled is False
+
+
+async def test_pressing_enter_with_an_invalid_name_keeps_the_dialog_open(
+    sample_branches: list[BranchInfo],
+    empty_config: Config,
+) -> None:
+    client = FakeGitClient(branches=sample_branches)
+    app = HopApp(sample_branches, client=client, config=empty_config)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+        for ch in "bad name":
+            await pilot.press(ch)
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert isinstance(app.screen, BranchNameInputScreen)
+        assert client.create_calls == []
 
 
 async def test_pressing_n_on_empty_branch_list_is_a_noop() -> None:

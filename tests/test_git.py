@@ -18,6 +18,7 @@ from hop.git import (
     get_branches_fast,
     get_current_branch,
     is_git_repo,
+    validate_branch_name,
 )
 
 
@@ -334,3 +335,43 @@ def test_create_branch_raises_when_git_branch_create_fails() -> None:
         pytest.raises(RuntimeError, match="Failed to create branch"),
     ):
         create_branch("main", "existing-branch")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "feature",
+        "feature/quick-fix",
+        "release/v1.2.3",
+        "a/b/c",
+        "fix_123",
+    ],
+)
+def test_validate_branch_name_accepts_valid_names(name: str) -> None:
+    assert validate_branch_name(name) is None
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("-branch", id="leading dash"),
+        pytest.param("/branch", id="leading slash"),
+        pytest.param("branch/", id="trailing slash"),
+        pytest.param("branch.", id="trailing dot"),
+        pytest.param("@", id="single at"),
+        pytest.param("a..b", id="double dot"),
+        pytest.param("a//b", id="double slash"),
+        pytest.param("a@{b", id="at brace"),
+        pytest.param("has space", id="space"),
+        pytest.param("has~tilde", id="tilde"),
+        pytest.param("has:colon", id="colon"),
+        pytest.param(".hidden", id="component starts with dot"),
+        pytest.param("feature.lock", id="ends with .lock"),
+    ],
+)
+def test_validate_branch_name_rejects_invalid_names_with_a_reason(name: str) -> None:
+    reason = validate_branch_name(name)
+
+    assert reason is not None
+    assert reason  # non-empty explanation
