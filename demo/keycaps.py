@@ -41,6 +41,7 @@ BADGES: list[tuple[str, str, float, float]] = [
 F = 30  # font size, px
 CW = F * 0.602  # DejaVu Sans Mono advance width per glyph
 SEP = "→"
+SEP_DY = round(F * 0.16)  # the arrow's glyph centre sits high; nudge it down onto the text
 KP, KVP = 14, 8  # keycap inner padding (x, y)
 GAP = 16  # gap between keycap / arrow / action
 BPX, BPY = 22, 12  # pill inner padding (x, y)
@@ -87,6 +88,7 @@ def _badge(regular: str, bold: str, key: str, action: str, s: float, e: float) -
     bar_t_box = f"ih-{BAR_H}-{BOTTOM_MARGIN}"
     keycap_t = f"ih-{BAR_H}-{BOTTOM_MARGIN}+{(BAR_H - KEYCAP_H) // 2}"
     text_y = f"h-{BAR_H}-{BOTTOM_MARGIN}+{(BAR_H - F) // 2}"
+    sep_y = f"h-{BAR_H}-{BOTTOM_MARGIN}+{(BAR_H - F) // 2 + SEP_DY}"
     en = f"enable='between(t,{s},{e})'"
 
     return [
@@ -95,7 +97,7 @@ def _badge(regular: str, bold: str, key: str, action: str, s: float, e: float) -
         f"drawbox=x={bar_l_box}+{keycap_l}:y={keycap_t}:w={keycap_w}:h={KEYCAP_H}:color={KEYCAP_BG}:t=fill:{en}",
         f"drawbox=x={bar_l_box}+{keycap_l}:y={keycap_t}:w={keycap_w}:h={KEYCAP_H}:color={KEYCAP_EDGE}:t=2:{en}",
         f"drawtext=fontfile={bold}:text={key}:fontsize={F}:fontcolor={KEYCAP_EDGE}:x={bar_l_txt}+{key_l}:y={text_y}:{en}",
-        f"drawtext=fontfile={regular}:text={SEP}:fontsize={F}:fontcolor={ACCENT}:x={bar_l_txt}+{sep_l}:y={text_y}:{en}",
+        f"drawtext=fontfile={regular}:text={SEP}:fontsize={F}:fontcolor={ACCENT}:x={bar_l_txt}+{sep_l}:y={sep_y}:{en}",
         f"drawtext=fontfile={bold}:text={action}:fontsize={F}:fontcolor={ACTION_FG}:x={bar_l_txt}+{action_l}:y={text_y}:{en}",
     ]
 
