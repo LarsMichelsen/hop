@@ -33,7 +33,7 @@ Steps:
 | `PLAYBOOK.md` | This spec — the storyline above. |
 | `make_repo.py` | Builds the deterministic synthetic repo (branches, upstream states, `main` on top, local git identity). |
 | `demo.tape` | [VHS](https://github.com/charmbracelet/vhs) script that sets up the branch-showing prompt, performs the storyline, and renders the base `demo.gif`. |
-| `keycaps.py` | Overlays the key-press badges onto the base `demo.gif` with `ffmpeg` (VHS has no keycast of its own). |
+| `keycaps.py` | Overlays the key-press badges onto the base `demo.gif` with `ffmpeg` (VHS has no keycast of its own), and disables looping so the GIF freezes on the final frame. |
 | `demo.gif` | The generated recording, embedded in the top-level `README.md`. |
 
 ## Generating
