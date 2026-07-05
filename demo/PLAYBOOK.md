@@ -30,11 +30,26 @@ The demo records a real terminal, so it shows hop *and* the shell around it:
 
 ## Generating
 
-Requires [`vhs`](https://github.com/charmbracelet/vhs) and `hop` on `PATH`
-(`uv tool install .` from the repo root). From the repo root:
+Requires `hop` on `PATH` (`uv tool install .` from the repo root) plus the VHS
+toolchain: [`vhs`](https://github.com/charmbracelet/vhs) and the two tools it
+shells out to — [`ttyd`](https://github.com/tsl0922/ttyd) and `ffmpeg`. From the
+repo root:
 
 ```bash
 vhs demo/demo.tape        # builds the synthetic repo and writes demo/demo.gif
+```
+
+VHS records inside a headless Chromium. On kernels that restrict unprivileged
+user namespaces (common on hardened / OEM setups — the symptom is
+`sys_chroot(...)` / `ptrace: Operation not permitted` followed by `recording
+failed`), Chromium's own sandbox can't start. Work around it by putting a
+wrapper named `google-chrome` (or `chromium`) earlier on `PATH` that appends
+`--no-sandbox`; VHS finds the browser via `PATH`, so the wrapper is picked up
+transparently:
+
+```bash
+#!/bin/sh
+exec /path/to/real/google-chrome --no-sandbox --disable-gpu --disable-dev-shm-usage "$@"
 ```
 
 ## Updating the demo
@@ -64,6 +79,8 @@ When the storyline changes, update the ingredients and re-validate:
 
    This catches wrong key sequences or row counts that a silent GIF would hide.
 4. **Regenerate** `demo.gif` with `vhs demo/demo.tape` and confirm it matches
-   the storyline, then commit the updated `demo.gif`.
+   the storyline. To eyeball it without opening the GIF, extract frames:
+   `ffmpeg -i demo/demo.gif -vf fps=1/2.2 frame%02d.png`. Then commit the
+   updated `demo.gif` — it is tracked and embedded in the top-level `README.md`.
 5. Keep this table of steps and the tape in the **same order**; the tape's
    comments reference these bullet points.
