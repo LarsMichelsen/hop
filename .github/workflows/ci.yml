@@ -19,6 +19,9 @@ env:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    # Backstop against a hung job (the whole run is normally well under 2 min);
+    # pytest-timeout catches per-test hangs, this bounds anything it can't.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 

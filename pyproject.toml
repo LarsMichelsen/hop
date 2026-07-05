@@ -30,6 +30,10 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 asyncio_mode = "auto"
+# Kill any test that runs far longer than the slowest real test (~1.2s locally),
+# with generous headroom for slower CI runners. Catches hangs and dumps the
+# offending test's stack instead of blocking the run indefinitely.
+timeout = 30
 addopts = "--cov=hop --cov-report=term-missing --cov-report=term:skip-covered --cov-fail-under=75"
 
 [tool.coverage.run]
@@ -82,5 +86,6 @@ dev = [
     "pytest>=8.4.2",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
+    "pytest-timeout>=2.4.0",
     "ruff>=0.14.4",
 ]
