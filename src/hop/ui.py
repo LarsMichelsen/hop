@@ -374,12 +374,17 @@ class HopApp(App[None]):
         overflow-x: hidden;
     }
 
-    /* Dim the focused cursor to a subtle panel highlight. We must set color
-       too: Textual's default cursor color is paired with its default cursor
-       background, so overriding only background yields unreadable contrast. */
+    /* Use the theme's purpose-built cursor colors instead of $panel/$foreground.
+       In the terminal-adapting "textual-ansi" theme every semantic color
+       (panel, foreground, surface, boost) collapses to ansi_default, so a
+       $panel/$foreground cursor is indistinguishable from a normal row. The
+       $block-cursor-* variables are the one pair each theme guarantees to
+       contrast — ansi_blue on ansi_default here, an auto-contrasting fg on the
+       accent elsewhere. */
     DataTable:focus > .datatable--cursor {
-        background: $panel;
-        color: $foreground;
+        background: $block-cursor-background;
+        color: $block-cursor-foreground;
+        text-style: $block-cursor-text-style;
     }
 
     #footer-container {
