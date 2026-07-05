@@ -197,9 +197,11 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
         align: center middle;
     }
 
+    /* Height grows with the content so a long source-branch title (which
+       wraps) or the validation hint never pushes the buttons past the border. */
     #input-dialog {
         width: 60;
-        height: 13;
+        height: auto;
         border: thick $background 80%;
         background: $surface;
         padding: 1 2;
@@ -217,13 +219,15 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
         margin-bottom: 1;
     }
 
-    /* Collapses to nothing while the name is valid, so the dialog keeps its
-       shape; shows the reason in the theme's error color otherwise. */
+    /* Reserves its own line (blank when the name is valid) so the dialog does
+       not resize as the hint appears; the equal top (input) and bottom margins
+       center it between the input and the buttons. */
     #input-hint {
         width: 100%;
-        height: auto;
+        height: 1;
         content-align: center middle;
         color: $error;
+        margin-bottom: 1;
     }
 
     #input-button-container {
@@ -318,24 +322,26 @@ def format_status(branch: BranchInfo) -> Text:
 
 
 def format_branch_name(branch_name: str, is_current: bool) -> Text | str:
-    """Return the branch name with a bright "* " prefix when it is the current branch."""
+    """Highlight the current branch: a green ``●`` marker and a bold green name.
+
+    Uses plain ``green`` (not ``bright_green``, which Solarized remaps to a grey
+    base tone) so the highlight stays green across terminal themes.
+    """
     if is_current:
-        return Text.assemble(("* ", "bold bright_green"), branch_name)
+        return Text(f"● {branch_name}", style="bold green")
     return branch_name
 
 
-def format_status_message(message: str) -> Text | str:
-    """Colour an ``Error…:`` label red so failures stand out in the status bar.
+def format_status_message(message: str, prefix: str = "", prefix_style: str = "") -> Text | str:
+    """Build a status line, optionally with a coloured ``[prefix]`` label.
 
-    Covers both ``Error: …`` and ``Error refreshing branches: …``; any other
-    message is returned unchanged. Trailing whitespace (git errors often end in
-    a newline) is trimmed so it does not leave blank lines in the footer.
+    Trailing whitespace (git errors often end in a newline) is trimmed so it
+    does not leave blank lines in the wrapping footer.
     """
     message = message.rstrip()
-    if message.startswith("Error") and ":" in message:
-        label, rest = message.split(":", 1)
-        return Text.assemble((f"{label}:", "bold red"), rest)
-    return message
+    if not prefix:
+        return message
+    return Text.assemble("[", (prefix, prefix_style), "] ", message)
 
 
 class BranchList(DataTable):  # type: ignore[misc]
@@ -562,12 +568,12 @@ class HopApp(App[None]):
         branch = self.branches[cursor_row]
         try:
             self.client.checkout_branch(branch.name)
-            self.show_status(f"Checked out branch: {branch.name}")
+            self.show_success(f"Checked out branch: {branch.name}")
             # Refresh the branch list to show the updated current branch
             # Pass the branch name to restore focus after refresh
             self.refresh_branches(focus_branch_name=branch.name)
         except RuntimeError as e:
-            self.show_status(f"Error: {e}")
+            self.show_error(str(e))
 
     def action_rebase(self) -> None:
         """Rebase to the selected branch."""
@@ -579,12 +585,12 @@ class HopApp(App[None]):
         branch = self.branches[cursor_row]
         try:
             self.client.rebase_to_branch(branch.name)
-            self.show_status(f"Rebased to branch: {branch.name}")
+            self.show_success(f"Rebased to branch: {branch.name}")
             # Refresh the branch list to show the updated state
             # Pass the branch name to restore focus after refresh
             self.refresh_branches(focus_branch_name=branch.name)
         except RuntimeError as e:
-            self.show_status(f"Error: {e}")
+            self.show_error(str(e))
 
     def action_delete(self) -> None:
         """Delete the selected branch."""
@@ -630,11 +636,11 @@ class HopApp(App[None]):
         """
         # Verify the branch at row_index still matches the name
         if row_index < 0 or row_index >= len(self.branches):
-            self.show_status("Error: Branch index out of range")
+            self.show_error("Branch index out of range")
             return
 
         if self.branches[row_index].name != branch_name:
-            self.show_status("Error: Branch list changed, please try again")
+            self.show_error("Branch list changed, please try again")
             return
 
         try:
@@ -650,10 +656,10 @@ class HopApp(App[None]):
             branch_list = self.query_one(BranchList)
             branch_list.remove_branch(row_index)
 
-            self.show_status(f"Deleted branch: {branch_name}")
+            self.show_success(f"Deleted branch: {branch_name}")
             # Do NOT exit - stay in UI for more operations
         except RuntimeError as e:
-            self.show_status(f"Error: {e}")
+            self.show_error(str(e))
 
     def action_new_branch(self) -> None:
         """Create a new branch from the selected branch."""
@@ -684,7 +690,7 @@ class HopApp(App[None]):
         branch_list = self.query_one(BranchList)
         cursor_row = branch_list.cursor_row
         if cursor_row < 0 or cursor_row >= len(self.branches):
-            self.show_status("Error: Invalid branch selection")
+            self.show_error("Invalid branch selection")
             return
 
         source_branch = self.branches[cursor_row]
@@ -692,11 +698,11 @@ class HopApp(App[None]):
         try:
             self.client.create_branch(source_branch.name, branch_name)
             self.client.checkout_branch(branch_name)
-            self.show_status(f"Created and checked out branch: {branch_name}")
+            self.show_success(f"Created and checked out branch: {branch_name}")
             # Refresh the branch list and move cursor to the new branch
             self.refresh_branches(focus_branch_name=branch_name)
         except RuntimeError as e:
-            self.show_status(f"Error: {e}")
+            self.show_error(str(e))
 
     def refresh_branches(self, focus_branch_name: str | None = None) -> None:
         """Refresh the branch list after creating a new branch.
@@ -754,12 +760,22 @@ class HopApp(App[None]):
             self.load_metadata()
 
         except RuntimeError as e:
-            self.show_status(f"Error refreshing branches: {e}")
+            self.show_error(f"Could not refresh branches: {e}")
 
     def show_status(self, message: str) -> None:
-        """Show a status message, with any ``Error…:`` label highlighted."""
-        status = self.query_one("#status", Static)
-        status.update(format_status_message(message))
+        """Show a neutral status message."""
+        self._render_status(format_status_message(message))
+
+    def show_success(self, message: str) -> None:
+        """Show a success message with a green ``[OK]`` prefix."""
+        self._render_status(format_status_message(message, "OK", "bold green"))
+
+    def show_error(self, message: str) -> None:
+        """Show an error message with a red ``[Error]`` prefix."""
+        self._render_status(format_status_message(message, "Error", "bold red"))
+
+    def _render_status(self, content: str | Text) -> None:
+        self.query_one("#status", Static).update(content)
 
 
 def run_interactive_ui(branches: list[BranchInfo], client: GitClient | None = None) -> None:

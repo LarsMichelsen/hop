@@ -70,11 +70,12 @@ def sample_branches() -> list[BranchInfo]:
 # ---------------------------------------------------------------------------
 
 
-def test_format_branch_name_marks_current_branch_with_star_prefix() -> None:
+def test_format_branch_name_highlights_current_branch_in_bold_green() -> None:
     result = format_branch_name("main", is_current=True)
 
     assert isinstance(result, Text)
-    assert result.plain == "* main"
+    assert result.plain == "● main"
+    assert "green" in str(result.style)
 
 
 def test_format_branch_name_returns_plain_string_for_non_current_branches() -> None:
@@ -114,33 +115,25 @@ def test_format_status_renders_loading_marker_dimmed() -> None:
     assert str(status.style) == "dim"
 
 
-def test_format_status_message_colorizes_the_error_label() -> None:
-    result = format_status_message("Error: something broke")
-
-    assert isinstance(result, Text)
-    assert result.plain == "Error: something broke"
-    red = next(s for s in result.spans if "red" in str(s.style))
-    assert result.plain[red.start : red.end] == "Error:"
-
-
-def test_format_status_message_colorizes_a_multiword_error_label() -> None:
-    result = format_status_message("Error refreshing branches: git unavailable")
-
-    assert isinstance(result, Text)
-    red = next(s for s in result.spans if "red" in str(s.style))
-    assert result.plain[red.start : red.end] == "Error refreshing branches:"
-
-
-def test_format_status_message_leaves_non_error_messages_unstyled() -> None:
+def test_format_status_message_without_a_prefix_returns_plain_text() -> None:
     assert format_status_message("Checked out branch: main") == "Checked out branch: main"
+
+
+def test_format_status_message_adds_a_colored_prefix_label() -> None:
+    result = format_status_message("something broke", "Error", "bold red")
+
+    assert isinstance(result, Text)
+    assert result.plain == "[Error] something broke"
+    red = next(s for s in result.spans if "red" in str(s.style))
+    assert result.plain[red.start : red.end] == "Error"
 
 
 def test_format_status_message_strips_trailing_whitespace() -> None:
     # Git errors often end in a newline; it must not leave blank lines behind.
-    result = format_status_message("Error: not a valid branch name\n\n")
+    result = format_status_message("not a valid branch name\n\n", "Error", "bold red")
 
     assert isinstance(result, Text)
-    assert result.plain == "Error: not a valid branch name"
+    assert result.plain == "[Error] not a valid branch name"
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +251,7 @@ async def test_pressing_c_checks_out_selected_branch_and_updates_status(
 
         assert client.checkout_calls == ["feature"]
         status = app.query_one("#status", Static)
-        assert "Checked out branch: feature" in str(status.content)
+        assert "[OK] Checked out branch: feature" in str(status.content)
 
 
 async def test_pressing_c_shows_error_status_when_checkout_fails(
@@ -274,7 +267,7 @@ async def test_pressing_c_shows_error_status_when_checkout_fails(
         await pilot.pause()
 
         status = app.query_one("#status", Static)
-        assert "Error: Checkout failed" in str(status.content)
+        assert "[Error] Checkout failed" in str(status.content)
 
 
 async def test_pressing_c_on_empty_branch_list_is_a_noop() -> None:
@@ -323,7 +316,7 @@ async def test_pressing_r_shows_error_status_when_rebase_fails(
         await pilot.pause()
 
         status = app.query_one("#status", Static)
-        assert "Error: Rebase failed" in str(status.content)
+        assert "[Error] Rebase failed" in str(status.content)
 
 
 async def test_pressing_r_on_empty_branch_list_is_a_noop() -> None:
@@ -447,7 +440,7 @@ async def test_pressing_d_shows_error_status_when_delete_fails(
         await pilot.pause()
 
         status = app.query_one("#status", Static)
-        assert "Error: Delete failed" in str(status.content)
+        assert "[Error] Delete failed" in str(status.content)
         assert [b.name for b in app.query_one(BranchList).branches] == ["main", "feature"]
 
 
@@ -650,7 +643,7 @@ async def test_create_failure_shows_error_status_and_skips_checkout(
 
         assert client.checkout_calls == []
         status = app.query_one("#status", Static)
-        assert "Error: Branch already exists" in str(status.content)
+        assert "[Error] Branch already exists" in str(status.content)
 
 
 async def test_checkout_failure_after_create_surfaces_error_in_status(
@@ -672,7 +665,7 @@ async def test_checkout_failure_after_create_surfaces_error_in_status(
 
         assert client.create_calls == [("main", "newone")]
         status = app.query_one("#status", Static)
-        assert "Error: Checkout failed" in str(status.content)
+        assert "[Error] Checkout failed" in str(status.content)
 
 
 async def test_new_branch_dialog_flags_an_invalid_name_and_disables_create(
@@ -857,7 +850,7 @@ async def test_refresh_failure_shows_error_status(
         await pilot.pause()
 
         status = app.query_one("#status", Static)
-        assert "Error refreshing branches" in str(status.content)
+        assert "[Error] Could not refresh branches" in str(status.content)
 
 
 # ---------------------------------------------------------------------------
