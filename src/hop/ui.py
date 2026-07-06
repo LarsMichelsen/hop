@@ -72,7 +72,7 @@ Navigation:
 
 Actions:
   c          Checkout selected branch
-  r          Rebase current branch to selected branch's upstream
+  r          Rebase selected branch onto its base
   d          Delete selected branch (with confirmation)
   n          Create new branch from selected branch
   t          Toggle light/dark theme
@@ -594,7 +594,7 @@ class HopApp(App[None]):
             self.show_error(str(e))
 
     def action_rebase(self) -> None:
-        """Rebase to the selected branch."""
+        """Rebase the selected branch onto its base."""
         branch_list = self.query_one(BranchList)
         cursor_row = branch_list.cursor_row
         if cursor_row < 0 or cursor_row >= len(self.branches):
