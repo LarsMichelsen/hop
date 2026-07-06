@@ -103,13 +103,17 @@ class SubprocessGitClient:
         Returns immediately with branch name, date, and last commit message.
         Call fetch_branch_metadata for upstream and merge status.
         """
+        # Tab-delimited, not "|": git permits "|" in ref names (and commit
+        # subjects), which would misalign the fields and crash the date parse.
+        # Tabs (and other control chars) are forbidden in ref names, and the
+        # subject is the trailing field, so a tab there is captured intact.
         result = subprocess.run(
             [
                 "git",
                 "for-each-ref",
                 "refs/heads/",
                 "--sort=-creatordate",
-                "--format=%(refname:short)|%(creatordate:short)|%(contents:subject)",
+                "--format=%(refname:short)%09%(creatordate:short)%09%(contents:subject)",
             ],
             capture_output=True,
             text=True,
@@ -123,7 +127,7 @@ class SubprocessGitClient:
         for line in result.stdout.strip().split("\n"):
             if not line:
                 continue
-            parts = line.split("|", 2)
+            parts = line.split("\t", 2)
             if len(parts) != 3:
                 continue
 
@@ -142,12 +146,14 @@ class SubprocessGitClient:
         return branches
 
     def fetch_branch_metadata(self, branch: BranchInfo) -> BranchInfo:
+        # Tab-delimited for the same reason as get_branches_fast: an upstream
+        # ref name may contain "|" but never a tab.
         result = subprocess.run(
             [
                 "git",
                 "for-each-ref",
                 f"refs/heads/{branch.name}",
-                "--format=%(upstream:short)|%(upstream:trackshort)",
+                "--format=%(upstream:short)%09%(upstream:trackshort)",
             ],
             capture_output=True,
             text=True,
@@ -158,7 +164,7 @@ class SubprocessGitClient:
         track_status = ""
 
         if result.returncode == 0 and result.stdout.strip():
-            parts = result.stdout.strip().split("|")
+            parts = result.stdout.strip().split("\t")
             if len(parts) >= 1:
                 upstream = parts[0] if parts[0] else None
             if len(parts) >= 2:

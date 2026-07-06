@@ -74,6 +74,30 @@ def test_get_branches_fast_returns_branches_sorted_by_creator_date_descending(
         assert branches[i].creator_date >= branches[i + 1].creator_date
 
 
+def test_get_branches_fast_parses_a_branch_whose_name_contains_a_pipe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Git permits "|" in ref names, so it must not double as the field
+    # separator: otherwise the date column shifts by one and strptime raises
+    # ValueError, crashing the listing on a perfectly valid branch.
+    git = ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test"]
+    subprocess.run([*git, "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        [*git, "commit", "--allow-empty", "-m", "init"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run([*git, "branch", "feat|x"], cwd=tmp_path, check=True, capture_output=True)
+    monkeypatch.chdir(tmp_path)
+
+    branches = get_branches_fast()
+
+    piped = next(b for b in branches if b.name == "feat|x")
+    assert isinstance(piped.creator_date, datetime)
+    assert piped.last_commit_message == "init"
+
+
 def test_get_branches_fast_raises_when_git_for_each_ref_fails() -> None:
     mock_result = Mock()
     mock_result.returncode = 1
@@ -96,10 +120,10 @@ def test_get_branches_fast_returns_empty_list_when_git_output_is_empty() -> None
         assert branches == []
 
 
-def test_get_branches_fast_skips_lines_that_lack_three_pipe_separated_parts() -> None:
+def test_get_branches_fast_skips_lines_that_lack_three_tab_separated_parts() -> None:
     mock_result = Mock()
     mock_result.returncode = 0
-    mock_result.stdout = "main|2025-01-01|Initial commit\ninvalid_line\n"
+    mock_result.stdout = "main\t2025-01-01\tInitial commit\ninvalid_line\n"
 
     with patch("subprocess.run", return_value=mock_result):
         branches = get_branches_fast()
@@ -116,7 +140,7 @@ def test_fetch_branch_metadata_returns_no_upstream_when_for_each_ref_emits_only_
 
     mock_result = Mock()
     mock_result.returncode = 0
-    mock_result.stdout = "|"
+    mock_result.stdout = "\t"
 
     with patch("subprocess.run", return_value=mock_result):
         updated = fetch_branch_metadata(branch)
@@ -135,7 +159,7 @@ def test_fetch_branch_metadata_marks_branch_merged_when_merge_base_succeeds() ->
 
     mock_for_each_ref = Mock()
     mock_for_each_ref.returncode = 0
-    mock_for_each_ref.stdout = "origin/feature|="
+    mock_for_each_ref.stdout = "origin/feature\t="
 
     mock_merge_base = Mock()
     mock_merge_base.returncode = 0
@@ -157,7 +181,7 @@ def test_fetch_branch_metadata_marks_branch_unmerged_when_merge_base_fails() -> 
 
     mock_for_each_ref = Mock()
     mock_for_each_ref.returncode = 0
-    mock_for_each_ref.stdout = "origin/feature|>"
+    mock_for_each_ref.stdout = "origin/feature\t>"
 
     mock_merge_base = Mock()
     mock_merge_base.returncode = 1
@@ -168,6 +192,28 @@ def test_fetch_branch_metadata_marks_branch_unmerged_when_merge_base_fails() -> 
         assert updated.track_status == ">"
         assert updated.is_merged is False
         assert updated.is_loading is False
+
+
+def test_fetch_branch_metadata_parses_upstream_ref_name_containing_a_pipe() -> None:
+    # An upstream ref may contain "|"; the tab field separator must keep it as
+    # part of the ref name rather than splitting the name from the status.
+    branch = BranchInfo(
+        name="feature",
+        creator_date=datetime.now(),
+        last_commit_message="Feature commit",
+    )
+
+    mock_for_each_ref = Mock()
+    mock_for_each_ref.returncode = 0
+    mock_for_each_ref.stdout = "origin/feat|x\t<>"
+
+    mock_merge_base = Mock()
+    mock_merge_base.returncode = 1
+
+    with patch("subprocess.run", side_effect=[mock_for_each_ref, mock_merge_base]):
+        updated = fetch_branch_metadata(branch)
+        assert updated.upstream == "origin/feat|x"
+        assert updated.track_status == "<>"
 
 
 def test_checkout_branch_completes_when_git_checkout_succeeds() -> None:
