@@ -315,7 +315,10 @@ def format_status(branch: BranchInfo) -> Text:
     status = branch.track_status if branch.track_status else "  "
 
     if status == "=":
-        return Text(status, style="bright_green")
+        # Plain "green", not "bright_green": Solarized remaps bright_green to a
+        # grey base tone, which would render the synced marker grey and clash
+        # with the green current-branch highlight (see format_branch_name).
+        return Text(status, style="green")
     elif status == "<":
         return Text(status, style="bright_yellow")
     elif status == ">":

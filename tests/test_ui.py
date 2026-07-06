@@ -88,7 +88,7 @@ def test_format_branch_name_returns_plain_string_for_non_current_branches() -> N
 @pytest.mark.parametrize(
     "track_status,expected_plain,expected_style",
     [
-        pytest.param("=", "=", "bright_green", id="synced"),
+        pytest.param("=", "=", "green", id="synced"),
         pytest.param("<", "<", "bright_yellow", id="behind"),
         pytest.param(">", ">", "bright_cyan", id="ahead"),
         pytest.param("<>", "<>", "bright_red", id="diverged"),
@@ -114,6 +114,19 @@ def test_format_status_renders_loading_marker_dimmed() -> None:
 
     assert status.plain == "--"
     assert str(status.style) == "dim"
+
+
+def test_synced_status_avoids_bright_green_to_stay_green_under_solarized() -> None:
+    # Solarized remaps bright_green to a grey base tone, so the synced marker
+    # must use the same plain green as the current-branch highlight to stay
+    # green across terminal themes instead of clashing (rendering grey).
+    synced = format_status(_branch("x", track_status="="))
+    highlight = format_branch_name("x", is_current=True)
+
+    assert isinstance(highlight, Text)
+    assert "green" in str(synced.style)
+    assert "bright_green" not in str(synced.style)
+    assert "bright_green" not in str(highlight.style)
 
 
 def test_format_status_message_without_a_prefix_returns_plain_text() -> None:
