@@ -198,7 +198,8 @@ class SubprocessGitClient:
         """Detect the base/upstream branch of the given branch.
 
         1. Use configured upstream if available
-        2. Find best common ancestor with main/master/develop
+        2. Otherwise pick the candidate (main/master/develop/development) the
+           branch most recently diverged from
         3. Return None if cannot determine
         """
         result = subprocess.run(
@@ -227,31 +228,56 @@ class SubprocessGitClient:
                         return local_branch
                 return upstream
 
+        # No configured upstream: guess the base. `git merge-base` succeeds for
+        # any pair sharing history, so its exit code alone can't tell which
+        # candidate a branch forked from — main/master would always win. Instead
+        # measure how many commits separate each candidate's merge-base from the
+        # branch tip and pick the nearest: the base the branch most recently
+        # diverged from. Ties fall to the earliest (conventional-name) candidate.
         common_bases = ["main", "master", "develop", "development"]
+
+        best_base: str | None = None
+        best_distance: int | None = None
 
         for base in common_bases:
             if base == branch_name:
                 continue
 
-            result = subprocess.run(
+            exists = subprocess.run(
                 ["git", "rev-parse", "--verify", f"refs/heads/{base}"],
                 capture_output=True,
                 check=False,
             )
 
-            if result.returncode != 0:
+            if exists.returncode != 0:
                 continue
 
-            result = subprocess.run(
+            merge_base = subprocess.run(
                 ["git", "merge-base", base, branch_name],
                 capture_output=True,
+                text=True,
                 check=False,
             )
 
-            if result.returncode == 0:
-                return base
+            if merge_base.returncode != 0 or not merge_base.stdout.strip():
+                continue
 
-        return None
+            distance = subprocess.run(
+                ["git", "rev-list", "--count", f"{merge_base.stdout.strip()}..{branch_name}"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if distance.returncode != 0 or not distance.stdout.strip():
+                continue
+
+            commits_ahead = int(distance.stdout.strip())
+            if best_distance is None or commits_ahead < best_distance:
+                best_base = base
+                best_distance = commits_ahead
+
+        return best_base
 
     def rebase_to_branch(self, branch_name: str) -> None:
         """Check out branch_name and rebase it onto its detected base branch."""

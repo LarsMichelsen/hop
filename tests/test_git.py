@@ -203,7 +203,64 @@ def test_get_base_branch_returns_local_branch_matching_configured_upstream() -> 
         assert base == "main"
 
 
-def test_get_base_branch_falls_back_to_main_when_upstream_is_unset() -> None:
+def _run_git(tmp_path: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test", *args],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_get_base_branch_picks_the_candidate_the_feature_most_recently_forked_from(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # main, develop and feature all share history, so `git merge-base` succeeds
+    # against either candidate. feature actually forked from develop, so the
+    # base must be develop — not main merely because it shares an ancestor.
+    _run_git(tmp_path, "init", "-b", "main")
+    _run_git(tmp_path, "commit", "--allow-empty", "-m", "main-1")
+    _run_git(tmp_path, "checkout", "-b", "develop")
+    _run_git(tmp_path, "commit", "--allow-empty", "-m", "develop-1")
+    _run_git(tmp_path, "checkout", "-b", "feature")
+    _run_git(tmp_path, "commit", "--allow-empty", "-m", "feature-1")
+    monkeypatch.chdir(tmp_path)
+
+    assert get_base_branch("feature") == "develop"
+
+
+def test_get_base_branch_falls_back_to_main_when_feature_forked_from_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Both main and develop fork-point the feature at the same commit, so the
+    # merge-base distance ties: the earliest candidate (main) must win.
+    _run_git(tmp_path, "init", "-b", "main")
+    _run_git(tmp_path, "commit", "--allow-empty", "-m", "main-1")
+    _run_git(tmp_path, "branch", "develop")
+    _run_git(tmp_path, "checkout", "-b", "feature")
+    _run_git(tmp_path, "commit", "--allow-empty", "-m", "feature-1")
+    monkeypatch.chdir(tmp_path)
+
+    assert get_base_branch("feature") == "main"
+
+
+def test_get_base_branch_skips_candidates_with_unrelated_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # main is an orphan root that shares no ancestor with feature, so its
+    # merge-base fails and it must be skipped in favour of develop.
+    _run_git(tmp_path, "init", "-b", "main")
+    _run_git(tmp_path, "commit", "--allow-empty", "-m", "main-1")
+    _run_git(tmp_path, "checkout", "--orphan", "develop")
+    _run_git(tmp_path, "commit", "--allow-empty", "-m", "develop-1")
+    _run_git(tmp_path, "checkout", "-b", "feature")
+    _run_git(tmp_path, "commit", "--allow-empty", "-m", "feature-1")
+    monkeypatch.chdir(tmp_path)
+
+    assert get_base_branch("feature") == "develop"
+
+
+def test_get_base_branch_skips_candidate_when_commit_count_fails() -> None:
     mock_no_upstream = Mock()
     mock_no_upstream.returncode = 0
     mock_no_upstream.stdout = ""
@@ -213,10 +270,28 @@ def test_get_base_branch_falls_back_to_main_when_upstream_is_unset() -> None:
 
     mock_merge_base = Mock()
     mock_merge_base.returncode = 0
+    mock_merge_base.stdout = "abc123\n"
 
-    with patch("subprocess.run", side_effect=[mock_no_upstream, mock_main_exists, mock_merge_base]):
-        base = get_base_branch("feature")
-        assert base == "main"
+    mock_count_fails = Mock()
+    mock_count_fails.returncode = 1
+    mock_count_fails.stdout = ""
+
+    mock_no_branch = Mock()
+    mock_no_branch.returncode = 1
+
+    with patch(
+        "subprocess.run",
+        side_effect=[
+            mock_no_upstream,
+            mock_main_exists,
+            mock_merge_base,
+            mock_count_fails,
+            mock_no_branch,  # master
+            mock_no_branch,  # develop
+            mock_no_branch,  # development
+        ],
+    ):
+        assert get_base_branch("feature") is None
 
 
 def test_get_base_branch_returns_none_when_no_candidate_base_exists() -> None:
