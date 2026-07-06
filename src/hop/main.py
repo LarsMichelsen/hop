@@ -15,15 +15,18 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         description="Helper for quick git branch hopping.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument(
-        "--init-config",
-        action="store_true",
+
+    # --force only makes sense for init-config, so it lives on the subcommand
+    # rather than at the top level (where `hop --force` was silently ignored).
+    subparsers = parser.add_subparsers(dest="command")
+    init_config = subparsers.add_parser(
+        "init-config",
         help="write an example config to the default location and exit",
     )
-    parser.add_argument(
+    init_config.add_argument(
         "--force",
         action="store_true",
-        help="with --init-config, overwrite an existing config file",
+        help="overwrite an existing config file",
     )
     return parser.parse_args(argv)
 
@@ -38,11 +41,11 @@ def _init_config(force: bool) -> None:
 
 
 def main(argv: list[str] | None = None, client: GitClient | None = None) -> None:
-    # --help / --version / --init-config are handled here, before we touch git,
+    # --help / --version / init-config are handled here, before we touch git,
     # so they work outside a repository too.
     args = _parse_args(argv)
 
-    if args.init_config:
+    if args.command == "init-config":
         _init_config(args.force)
         return
 

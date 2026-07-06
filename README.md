@@ -60,8 +60,8 @@ it is optional. An absent file, section, or key falls back to the defaults
 shown below. Create a documented starting point with:
 
 ```bash
-hop --init-config          # write ~/.config/hop/config.toml
-hop --init-config --force  # overwrite an existing file
+hop init-config          # write ~/.config/hop/config.toml
+hop init-config --force  # overwrite an existing file
 ```
 
 ```toml

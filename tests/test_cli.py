@@ -68,7 +68,7 @@ def test_init_config_writes_example_to_default_location(
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
 
-    main(["--init-config"])
+    main(["init-config"])
 
     written = tmp_path / ".config" / "hop" / "config.toml"
     assert written.read_text(encoding="utf-8") == get_example_config()
@@ -79,10 +79,10 @@ def test_init_config_refuses_to_overwrite_existing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    main(["--init-config"])
+    main(["init-config"])
 
     with pytest.raises(SystemExit) as exc:
-        main(["--init-config"])
+        main(["init-config"])
 
     assert exc.value.code == 1
     assert "already exists" in capsys.readouterr().err
@@ -96,6 +96,18 @@ def test_init_config_force_overwrites_existing(
     written.parent.mkdir(parents=True)
     written.write_text("stale")
 
-    main(["--init-config", "--force"])
+    main(["init-config", "--force"])
 
     assert written.read_text(encoding="utf-8") == get_example_config()
+
+
+def test_force_without_init_config_is_rejected_instead_of_silently_ignored(
+    empty_dir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # --force belongs to the init-config subcommand; on its own it must be a
+    # usage error, not a no-op.
+    with pytest.raises(SystemExit) as exc:
+        main(["--force"])
+
+    assert exc.value.code == 2
+    assert "--force" in capsys.readouterr().err
