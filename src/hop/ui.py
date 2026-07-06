@@ -380,9 +380,20 @@ class BranchList(DataTable):  # type: ignore[misc]
         branch_name = format_branch_name(branch.name, branch.name == self.current_branch)
         self.add_row(date_str, status, branch_name, branch.last_commit_message)  # type: ignore[misc]
 
-    def update_branch(self, branch: BranchInfo, row_index: int) -> None:
-        """Update a branch row with new metadata."""
-        if row_index >= len(self.branches):
+    def update_branch(self, branch: BranchInfo) -> None:
+        """Refresh the row for ``branch``, matched by name.
+
+        Metadata loads asynchronously, so by the time a result arrives the
+        branch may have moved to a different row (a branch above it was
+        deleted) or be gone entirely. Match by name — not by a positional
+        index captured when the load started — so the result never lands on a
+        different branch's row. Do nothing if the branch is no longer listed.
+        """
+        row_index = next(
+            (i for i, existing in enumerate(self.branches) if existing.name == branch.name),
+            None,
+        )
+        if row_index is None:
             return
 
         self.branches[row_index] = branch
@@ -528,26 +539,28 @@ class HopApp(App[None]):
         self.show_status(f"Theme: {self.theme}")
 
     @work(exclusive=False, thread=True)
-    def load_metadata_for_branch(self, branch: BranchInfo, index: int) -> BranchInfo:
+    def load_metadata_for_branch(self, branch: BranchInfo) -> BranchInfo:
         """Load metadata for a single branch in a background thread."""
         return self.client.fetch_branch_metadata(branch)
 
     def load_metadata(self) -> None:
         """Start loading metadata for all branches."""
-        for i, branch in enumerate(self.branches):
-            worker = self.load_metadata_for_branch(branch, i)
-            worker.index = i  # type: ignore[attr-defined]
-            self.metadata_workers.append(worker)
+        for branch in self.branches:
+            self.metadata_workers.append(self.load_metadata_for_branch(branch))
 
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:  # type: ignore[misc]
-        """Handle worker completion."""
+        """Handle worker completion.
+
+        The result carries the branch name, so routing goes by name inside
+        update_branch — the branch may have shifted rows or been deleted while
+        this metadata was loading.
+        """
         if (
             event.state == event.worker.state.SUCCESS  # type: ignore[misc]
             and event.worker.result is not None  # type: ignore[misc]
         ):
-            index = event.worker.index  # type: ignore[attr-defined,misc]
             branch_list = self.query_one(BranchList)
-            branch_list.update_branch(event.worker.result, index)  # type: ignore[arg-type,misc]
+            branch_list.update_branch(event.worker.result)  # type: ignore[arg-type,misc]
 
     def action_cursor_down(self) -> None:
         """Move cursor down."""

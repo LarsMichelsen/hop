@@ -1,5 +1,6 @@
 """Tests for UI module."""
 
+import threading
 from datetime import datetime
 from unittest.mock import Mock, patch
 
@@ -166,12 +167,12 @@ async def test_update_branch_replaces_branch_entry_in_internal_list(
             upstream="origin/main",
             track_status="<",
         )
-        branch_list.update_branch(updated, 0)
+        branch_list.update_branch(updated)
 
         assert branch_list.branches[0] == updated
 
 
-async def test_update_branch_is_noop_when_index_is_out_of_range(
+async def test_update_branch_is_noop_when_branch_is_no_longer_listed(
     sample_branches: list[BranchInfo],
 ) -> None:
     app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
@@ -181,7 +182,7 @@ async def test_update_branch_is_noop_when_index_is_out_of_range(
         branch_list = app.query_one(BranchList)
         before = list(branch_list.branches)
 
-        branch_list.update_branch(_branch("ghost"), 99)
+        branch_list.update_branch(_branch("ghost"))
 
         assert branch_list.branches == before
 
@@ -509,6 +510,74 @@ async def test_confirm_delete_screen_highlights_the_warning() -> None:
         content = app.screen.query_one("#confirm-message", Label).content
         assert isinstance(content, Text)
         assert any("bold" in str(span.style) for span in content.spans)
+
+
+# ---------------------------------------------------------------------------
+# Metadata routing while the branch list is mutated
+# ---------------------------------------------------------------------------
+
+
+class _GatedMetadataClient(FakeGitClient):
+    """FakeGitClient whose metadata load blocks until the test releases it.
+
+    Lets a test act on the branch list (e.g. delete a branch) while the
+    background metadata workers are still in flight.
+    """
+
+    def __init__(self, branches: list[BranchInfo]) -> None:
+        super().__init__(branches=branches)
+        self._gate = threading.Event()
+
+    def release_metadata(self) -> None:
+        self._gate.set()
+
+    def fetch_branch_metadata(self, branch: BranchInfo) -> BranchInfo:
+        # Bounded wait so a forgotten release() can never hang the suite.
+        self._gate.wait(timeout=5)
+        return super().fetch_branch_metadata(branch)
+
+
+async def _drain_workers(app: HopApp, pilot: object) -> None:
+    """Pump the app until every metadata worker has finished and been routed."""
+    for _ in range(100):
+        await pilot.pause()  # type: ignore[attr-defined]
+        if all(worker.is_finished for worker in list(app.workers)):
+            break
+    await pilot.pause()  # type: ignore[attr-defined]
+
+
+async def test_in_flight_metadata_lands_on_its_own_branch_after_a_delete() -> None:
+    # Deleting a branch shifts every lower row up by one. Metadata workers that
+    # are still loading must write their result onto their OWN branch, not onto
+    # whatever branch now occupies their old row index.
+    branches = [
+        _branch("main", track_status="<", is_loading=False),
+        _branch("synced", track_status="=", is_loading=False),
+        _branch("diverged", track_status="<>", is_loading=True),
+        _branch("ahead", track_status=">", is_loading=True),
+    ]
+    client = _GatedMetadataClient(branches)
+    app = HopApp(list(branches), client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()  # workers start and block in fetch_branch_metadata
+
+        await pilot.press("j")  # cursor -> "synced" (row 1)
+        await pilot.press("d")  # synced + not loading -> instant delete
+        await pilot.pause()
+        assert client.delete_calls == ["synced"]
+
+        client.release_metadata()  # the in-flight workers now complete
+        await _drain_workers(app, pilot)
+
+        result = app.query_one(BranchList).branches
+        assert [b.name for b in result] == ["main", "diverged", "ahead"]
+        assert all(not b.is_loading for b in result)
+        assert {b.name: b.track_status for b in result} == {
+            "main": "<",
+            "diverged": "<>",
+            "ahead": ">",
+        }
 
 
 # ---------------------------------------------------------------------------
