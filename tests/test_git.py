@@ -353,7 +353,7 @@ def test_get_base_branch_returns_none_when_no_candidate_base_exists() -> None:
         assert base is None
 
 
-def test_rebase_to_branch_raises_when_git_rebase_fails() -> None:
+def test_rebase_to_branch_aborts_the_rebase_when_it_fails() -> None:
     class StubClient(SubprocessGitClient):
         def get_base_branch(self, branch_name: str) -> str | None:
             return "main"
@@ -365,11 +365,17 @@ def test_rebase_to_branch_raises_when_git_rebase_fails() -> None:
     mock_rebase.returncode = 1
     mock_rebase.stderr = "fatal: conflict"
 
+    mock_abort = Mock()
+    mock_abort.returncode = 0
+
     with (
-        patch("subprocess.run", side_effect=[mock_checkout, mock_rebase]),
-        pytest.raises(RuntimeError, match="Failed to rebase to main"),
+        patch("subprocess.run", side_effect=[mock_checkout, mock_rebase, mock_abort]) as mock_run,
+        pytest.raises(RuntimeError, match="rebase aborted"),
     ):
         StubClient().rebase_to_branch("feature")
+
+    commands = [call.args[0] for call in mock_run.call_args_list]
+    assert ["git", "rebase", "--abort"] in commands
 
 
 def test_rebase_to_branch_completes_when_checkout_and_rebase_succeed() -> None:

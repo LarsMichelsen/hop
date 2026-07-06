@@ -313,7 +313,18 @@ class SubprocessGitClient:
         )
 
         if result.returncode != 0:
-            raise RuntimeError(f"Failed to rebase to {base_branch}: {result.stderr}")
+            # A conflicting rebase stops midway and leaves the repo in a
+            # rebasing state. hop can't resolve conflicts interactively, so
+            # abort to restore the pre-rebase state rather than stranding the
+            # user mid-rebase with no way out from within the app.
+            subprocess.run(
+                ["git", "rebase", "--abort"],
+                capture_output=True,
+                check=False,
+            )
+            raise RuntimeError(
+                f"Failed to rebase onto {base_branch} (rebase aborted): {result.stderr}"
+            )
 
     def delete_branch(self, branch_name: str) -> None:
         try:
