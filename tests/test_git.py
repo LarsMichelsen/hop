@@ -164,7 +164,14 @@ def test_fetch_branch_metadata_marks_branch_merged_when_merge_base_succeeds() ->
     mock_merge_base = Mock()
     mock_merge_base.returncode = 0
 
-    with patch("subprocess.run", side_effect=[mock_for_each_ref, mock_merge_base]):
+    # The base-branch guess probes each candidate (main/master/...); none exist.
+    mock_no_candidate = Mock()
+    mock_no_candidate.returncode = 1
+
+    with patch(
+        "subprocess.run",
+        side_effect=[mock_for_each_ref, mock_merge_base] + [mock_no_candidate] * 4,
+    ):
         updated = fetch_branch_metadata(branch)
         assert updated.upstream == "origin/feature"
         assert updated.track_status == "="
@@ -186,7 +193,13 @@ def test_fetch_branch_metadata_marks_branch_unmerged_when_merge_base_fails() -> 
     mock_merge_base = Mock()
     mock_merge_base.returncode = 1
 
-    with patch("subprocess.run", side_effect=[mock_for_each_ref, mock_merge_base]):
+    mock_no_candidate = Mock()
+    mock_no_candidate.returncode = 1
+
+    with patch(
+        "subprocess.run",
+        side_effect=[mock_for_each_ref, mock_merge_base] + [mock_no_candidate] * 4,
+    ):
         updated = fetch_branch_metadata(branch)
         assert updated.upstream == "origin/feature"
         assert updated.track_status == ">"
@@ -210,10 +223,111 @@ def test_fetch_branch_metadata_parses_upstream_ref_name_containing_a_pipe() -> N
     mock_merge_base = Mock()
     mock_merge_base.returncode = 1
 
-    with patch("subprocess.run", side_effect=[mock_for_each_ref, mock_merge_base]):
+    mock_no_candidate = Mock()
+    mock_no_candidate.returncode = 1
+
+    with patch(
+        "subprocess.run",
+        side_effect=[mock_for_each_ref, mock_merge_base] + [mock_no_candidate] * 4,
+    ):
         updated = fetch_branch_metadata(branch)
         assert updated.upstream == "origin/feat|x"
         assert updated.track_status == "<>"
+
+
+def test_fetch_branch_metadata_counts_commits_ahead_and_behind_the_base_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git = ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test"]
+    subprocess.run([*git, "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    commit = [*git, "commit", "--allow-empty", "-m"]
+    subprocess.run([*commit, "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run([*git, "branch", "feature"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run([*commit, "main-1"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run([*commit, "main-2"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run([*git, "checkout", "feature"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run([*commit, "feat-1"], cwd=tmp_path, check=True, capture_output=True)
+    monkeypatch.chdir(tmp_path)
+
+    branch = BranchInfo(name="feature", creator_date=datetime.now(), last_commit_message="feat-1")
+
+    updated = fetch_branch_metadata(branch)
+
+    assert updated.base_branch == "main"
+    assert updated.ahead == 1
+    assert updated.behind == 2
+
+
+def test_fetch_branch_metadata_leaves_counts_unset_when_no_base_branch_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The main branch itself has no base to compare against in a repo without
+    # other main-line candidates, so its counts must stay unknown, not 0/0.
+    git = ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test"]
+    subprocess.run([*git, "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        [*git, "commit", "--allow-empty", "-m", "init"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    monkeypatch.chdir(tmp_path)
+
+    branch = BranchInfo(name="main", creator_date=datetime.now(), last_commit_message="init")
+
+    updated = fetch_branch_metadata(branch)
+
+    assert updated.base_branch is None
+    assert updated.ahead is None
+    assert updated.behind is None
+
+
+def test_fetch_branch_metadata_leaves_counts_unset_when_rev_list_fails() -> None:
+    branch = BranchInfo(
+        name="feature",
+        creator_date=datetime.now(),
+        last_commit_message="Feature commit",
+    )
+
+    mock_no_upstream = Mock()
+    mock_no_upstream.returncode = 0
+    mock_no_upstream.stdout = "\t"
+
+    # The guess finds "main": ref exists, shares a merge-base, zero distance.
+    mock_ref_exists = Mock()
+    mock_ref_exists.returncode = 0
+
+    mock_merge_base = Mock()
+    mock_merge_base.returncode = 0
+    mock_merge_base.stdout = "abc123\n"
+
+    mock_distance = Mock()
+    mock_distance.returncode = 0
+    mock_distance.stdout = "0\n"
+
+    mock_no_candidate = Mock()
+    mock_no_candidate.returncode = 1
+
+    mock_rev_list = Mock()
+    mock_rev_list.returncode = 128
+    mock_rev_list.stdout = ""
+
+    with patch(
+        "subprocess.run",
+        side_effect=[
+            mock_no_upstream,
+            mock_ref_exists,
+            mock_merge_base,
+            mock_distance,
+            *[mock_no_candidate] * 3,
+            mock_rev_list,
+        ],
+    ):
+        updated = fetch_branch_metadata(branch)
+
+    assert updated.base_branch == "main"
+    assert updated.ahead is None
+    assert updated.behind is None
 
 
 def test_checkout_branch_completes_when_git_checkout_succeeds() -> None:

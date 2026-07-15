@@ -55,6 +55,9 @@ class FakeGitClient:
             track_status=branch.track_status,
             is_merged=branch.is_merged,
             is_loading=False,
+            base_branch=branch.base_branch,
+            ahead=branch.ahead,
+            behind=branch.behind,
         )
 
     def checkout_branch(self, branch_name: str) -> None:

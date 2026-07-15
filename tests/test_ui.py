@@ -18,6 +18,7 @@ from hop.ui import (
     HelpScreen,
     HopApp,
     delete_warning_message,
+    format_base_details,
     format_branch_name,
     format_status,
     format_status_message,
@@ -40,6 +41,9 @@ def _branch(
     track_status: str = "",
     is_merged: bool = False,
     is_loading: bool = False,
+    base_branch: str | None = None,
+    ahead: int | None = None,
+    behind: int | None = None,
 ) -> BranchInfo:
     return BranchInfo(
         name=name,
@@ -49,6 +53,9 @@ def _branch(
         track_status=track_status,
         is_merged=is_merged,
         is_loading=is_loading,
+        base_branch=base_branch,
+        ahead=ahead,
+        behind=behind,
     )
 
 
@@ -114,6 +121,43 @@ def test_format_status_renders_loading_marker_dimmed() -> None:
 
     assert status.plain == "--"
     assert str(status.style) == "dim"
+
+
+def test_format_base_details_renders_loading_marker_dimmed() -> None:
+    result = format_base_details(_branch("x", is_loading=True))
+
+    assert result.plain == "--"
+    assert str(result.style) == "dim"
+
+
+def test_format_base_details_says_so_when_no_base_branch_was_found() -> None:
+    result = format_base_details(_branch("x"))
+
+    assert result.plain == "no base branch found"
+    assert str(result.style) == "dim"
+
+
+def test_format_base_details_names_the_base_when_counting_failed() -> None:
+    result = format_base_details(_branch("x", base_branch="main"))
+
+    assert result.plain == "vs main: unknown"
+    assert str(result.style) == "dim"
+
+
+def test_format_base_details_names_the_base_and_colors_nonzero_counts() -> None:
+    result = format_base_details(_branch("x", base_branch="main", ahead=2, behind=3))
+
+    assert result.plain == "vs main: +2 -3"
+    styles = [str(span.style) for span in result.spans]
+    assert styles == ["bold", "bright_cyan", "bright_yellow"]
+
+
+def test_format_base_details_dims_zero_counts() -> None:
+    result = format_base_details(_branch("x", base_branch="main", ahead=0, behind=0))
+
+    assert result.plain == "vs main: +0 -0"
+    styles = [str(span.style) for span in result.spans]
+    assert styles == ["bold", "dim", "dim"]
 
 
 def test_synced_status_avoids_bright_green_to_stay_green_under_solarized() -> None:
@@ -198,6 +242,36 @@ async def test_update_branch_is_noop_when_branch_is_no_longer_listed(
         branch_list.update_branch(_branch("ghost"))
 
         assert branch_list.branches == before
+
+
+async def test_details_line_shows_base_distance_for_the_selected_branch() -> None:
+    branches = [
+        _branch("feature", base_branch="main", ahead=1, behind=2),
+        _branch("main"),
+    ]
+    app = HopApp(branches, client=FakeGitClient(branches=branches))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        details = app.query_one("#details", Static)
+        assert "vs main: +1 -2" in str(details.content)
+
+
+async def test_details_line_follows_the_cursor() -> None:
+    branches = [
+        _branch("feature", base_branch="main", ahead=1, behind=2),
+        _branch("main"),
+    ]
+    app = HopApp(branches, client=FakeGitClient(branches=branches))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await pilot.press("j")
+
+        details = app.query_one("#details", Static)
+        assert "no base branch found" in str(details.content)
 
 
 async def test_remove_branch_is_noop_for_out_of_range_indices(

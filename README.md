@@ -17,6 +17,8 @@ top, so the one you want is almost always a keystroke away.
 - Interactive text-based UI for browsing git branches
 - List branches ordered by last commit date
 - Show branch info: date, sync status, name, and last commit message
+- Details line for the selected branch: commits ahead/behind its base branch
+  (e.g. `vs main: +2 -5`)
 - Quick actions: checkout, rebase, delete, or create branches
 - Shows upstream branch and merge status
 - Vim-style navigation (arrow keys or j/k)

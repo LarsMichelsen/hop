@@ -15,6 +15,11 @@ class BranchInfo:
     track_status: str = ""  # one of: "=", "<", ">", "<>", ""
     is_merged: bool = False
     is_loading: bool = True
+    # Guessed base branch (main/master/...) and the commit counts relative to
+    # it; None when no base could be determined.
+    base_branch: str | None = None
+    ahead: int | None = None
+    behind: int | None = None
 
 
 _FORBIDDEN_BRANCH_CHARS = " \t~^:?*[\\"
@@ -179,6 +184,13 @@ class SubprocessGitClient:
             )
             is_merged = result.returncode == 0
 
+        # Measure the distance against the guessed main-line base
+        # (main/master/...), not the configured upstream: upstream sync is
+        # already covered by track_status, and a branch pushed with ``-u``
+        # tracks its own remote copy, which would always compare equal.
+        base_branch = self._guess_base_branch(branch.name)
+        ahead, behind = self._count_ahead_behind(branch.name, base_branch)
+
         return BranchInfo(
             name=branch.name,
             creator_date=branch.creator_date,
@@ -187,7 +199,31 @@ class SubprocessGitClient:
             track_status=track_status,
             is_merged=is_merged,
             is_loading=False,
+            base_branch=base_branch,
+            ahead=ahead,
+            behind=behind,
         )
+
+    def _count_ahead_behind(
+        self, branch_name: str, base: str | None
+    ) -> tuple[int | None, int | None]:
+        if base is None:
+            return None, None
+
+        result = subprocess.run(
+            ["git", "rev-list", "--left-right", "--count", f"{base}...{branch_name}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        parts = result.stdout.split() if result.returncode == 0 else []
+        if len(parts) != 2:
+            return None, None
+
+        # Left side counts commits only in the base (branch is behind by
+        # these), right side commits only in the branch (ahead by these).
+        return int(parts[1]), int(parts[0])
 
     def checkout_branch(self, branch_name: str) -> None:
         result = subprocess.run(
@@ -234,12 +270,16 @@ class SubprocessGitClient:
                         return local_branch
                 return upstream
 
-        # No configured upstream: guess the base. `git merge-base` succeeds for
-        # any pair sharing history, so its exit code alone can't tell which
-        # candidate a branch forked from — main/master would always win. Instead
-        # measure how many commits separate each candidate's merge-base from the
-        # branch tip and pick the nearest: the base the branch most recently
-        # diverged from. Ties fall to the earliest (conventional-name) candidate.
+        return self._guess_base_branch(branch_name)
+
+    def _guess_base_branch(self, branch_name: str) -> str | None:
+        # Guess the base among the conventional main-line names. `git
+        # merge-base` succeeds for any pair sharing history, so its exit code
+        # alone can't tell which candidate a branch forked from — main/master
+        # would always win. Instead measure how many commits separate each
+        # candidate's merge-base from the branch tip and pick the nearest: the
+        # base the branch most recently diverged from. Ties fall to the
+        # earliest (conventional-name) candidate.
         common_bases = ["main", "master", "develop", "development"]
 
         best_base: str | None = None

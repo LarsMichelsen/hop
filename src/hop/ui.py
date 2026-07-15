@@ -86,6 +86,11 @@ Status Indicators:
   <>         Branch diverged from upstream (red)
   --         Loading metadata...
   *          Current branch marker
+
+Details Line (footer):
+  vs main: +a -b
+             Selected branch is a commits ahead of
+             and b commits behind its base branch
                     """
                 )
             with Horizontal(id="close-button-container"):
@@ -329,6 +334,29 @@ def format_status(branch: BranchInfo) -> Text:
         return Text(status, style="dim")
 
 
+def format_base_details(branch: BranchInfo) -> Text:
+    """Details line for the selected branch: distance to its base branch.
+
+    Names the base the numbers refer to, e.g. ``vs main: +2 -5``. ``+n``
+    ahead in cyan and ``-n`` behind in yellow, matching the ``>``/``<``
+    upstream status colors; zero counts are dimmed.
+    """
+    if branch.is_loading:
+        return Text("--", style="dim")
+    if branch.base_branch is None:
+        return Text("no base branch found", style="dim")
+    if branch.ahead is None or branch.behind is None:
+        return Text(f"vs {branch.base_branch}: unknown", style="dim")
+    return Text.assemble(
+        "vs ",
+        (branch.base_branch, "bold"),
+        ": ",
+        (f"+{branch.ahead}", "bright_cyan" if branch.ahead else "dim"),
+        " ",
+        (f"-{branch.behind}", "bright_yellow" if branch.behind else "dim"),
+    )
+
+
 def format_branch_name(branch_name: str, is_current: bool) -> Text | str:
     """Highlight the current branch: a green ``*`` marker and a bold green name.
 
@@ -471,6 +499,14 @@ class HopApp(App[None]):
         background: $boost;
     }
 
+    /* Details about the selected branch (distance to its base branch). */
+    #details {
+        width: 100%;
+        height: 1;
+        background: $boost;
+        padding: 0 1;
+    }
+
     #status {
         width: 100%;
         height: auto;
@@ -516,6 +552,7 @@ class HopApp(App[None]):
         """Compose the UI."""
         yield BranchList(self.branches)
         with Vertical(id="footer-container"):
+            yield Static("", id="details")
             yield Static("Ready", id="status")
             yield Static(
                 "[underline]c[/]heckout  [underline]r[/]ebase  "
@@ -535,6 +572,9 @@ class HopApp(App[None]):
             resolved = pick_terminal_fallback(frozenset(self.available_themes))
         self.theme = resolved
         self.load_metadata()
+        # The initial cursor placement does not emit RowHighlighted, so seed
+        # the details line for the first row explicitly.
+        self._update_details(self.query_one(BranchList).cursor_row)
 
     def action_toggle_theme(self) -> None:
         """Toggle between Textual's dark and light themes."""
@@ -564,6 +604,19 @@ class HopApp(App[None]):
         ):
             branch_list = self.query_one(BranchList)
             branch_list.update_branch(event.worker.result)  # type: ignore[arg-type,misc]
+            # The loaded metadata may belong to the selected row.
+            self._update_details(branch_list.cursor_row)
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:  # type: ignore[misc]
+        self._update_details(event.cursor_row)  # type: ignore[misc]
+
+    def _update_details(self, row_index: int) -> None:
+        """Show base-branch distance details for the branch at ``row_index``."""
+        branch_list = self.query_one(BranchList)
+        content: Text | str = ""
+        if 0 <= row_index < len(branch_list.branches):
+            content = format_base_details(branch_list.branches[row_index])
+        self.query_one("#details", Static).update(content)
 
     def action_cursor_down(self) -> None:
         """Move cursor down."""
@@ -676,6 +729,8 @@ class HopApp(App[None]):
             # Remove from branches list and update UI
             branch_list = self.query_one(BranchList)
             branch_list.remove_branch(row_index)
+            # The cursor may now rest on a different branch (or none).
+            self._update_details(branch_list.cursor_row)
 
             self.show_success(f"Deleted branch: {branch_name}")
             # Do NOT exit - stay in UI for more operations
@@ -776,6 +831,9 @@ class HopApp(App[None]):
 
             # Restore focus to the branch list
             new_branch_list.focus()
+            # Cursor restoration may keep the same row index, which emits no
+            # RowHighlighted, so refresh the details line explicitly.
+            self._update_details(new_branch_list.cursor_row)
 
             # Start loading metadata for new branches
             self.load_metadata()
