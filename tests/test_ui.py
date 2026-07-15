@@ -18,9 +18,8 @@ from hop.ui import (
     HelpScreen,
     HopApp,
     delete_warning_message,
-    format_base_details,
     format_branch_name,
-    format_status,
+    format_details,
     format_status_message,
     run_interactive_ui,
 )
@@ -44,6 +43,8 @@ def _branch(
     base_branch: str | None = None,
     ahead: int | None = None,
     behind: int | None = None,
+    upstream_ahead: int | None = None,
+    upstream_behind: int | None = None,
 ) -> BranchInfo:
     return BranchInfo(
         name=name,
@@ -56,6 +57,8 @@ def _branch(
         base_branch=base_branch,
         ahead=ahead,
         behind=behind,
+        upstream_ahead=upstream_ahead,
+        upstream_behind=upstream_behind,
     )
 
 
@@ -92,84 +95,68 @@ def test_format_branch_name_returns_plain_string_for_non_current_branches() -> N
     assert result == "feature"
 
 
-@pytest.mark.parametrize(
-    "track_status,expected_plain,expected_style",
-    [
-        pytest.param("=", "=", "green", id="synced"),
-        pytest.param("<", "<", "bright_yellow", id="behind"),
-        pytest.param(">", ">", "bright_cyan", id="ahead"),
-        pytest.param("<>", "<>", "bright_red", id="diverged"),
-        pytest.param("", "  ", "dim", id="no upstream"),
-    ],
-)
-def test_format_status_renders_track_status_with_expected_color(
-    track_status: str, expected_plain: str, expected_style: str
-) -> None:
-    branch = _branch("x", track_status=track_status)
-
-    status = format_status(branch)
-
-    assert isinstance(status, Text)
-    assert status.plain == expected_plain
-    assert str(status.style) == expected_style
-
-
-def test_format_status_renders_loading_marker_dimmed() -> None:
-    branch = _branch("x", is_loading=True)
-
-    status = format_status(branch)
-
-    assert status.plain == "--"
-    assert str(status.style) == "dim"
-
-
-def test_format_base_details_renders_loading_marker_dimmed() -> None:
-    result = format_base_details(_branch("x", is_loading=True))
+def test_format_details_renders_loading_marker_dimmed() -> None:
+    result = format_details(_branch("x", is_loading=True))
 
     assert result.plain == "--"
     assert str(result.style) == "dim"
 
 
-def test_format_base_details_says_so_when_no_base_branch_was_found() -> None:
-    result = format_base_details(_branch("x"))
+def test_format_details_says_so_when_base_and_upstream_are_missing() -> None:
+    result = format_details(_branch("x"))
 
-    assert result.plain == "no base branch found"
-    assert str(result.style) == "dim"
-
-
-def test_format_base_details_names_the_base_when_counting_failed() -> None:
-    result = format_base_details(_branch("x", base_branch="main"))
-
-    assert result.plain == "vs main: unknown"
-    assert str(result.style) == "dim"
+    assert result.plain == "no base branch found | no upstream"
 
 
-def test_format_base_details_names_the_base_and_colors_nonzero_counts() -> None:
-    result = format_base_details(_branch("x", base_branch="main", ahead=2, behind=3))
+def test_format_details_names_the_base_when_counting_failed() -> None:
+    result = format_details(_branch("x", base_branch="main"))
 
-    assert result.plain == "vs main: +2 -3"
-    styles = [str(span.style) for span in result.spans]
-    assert styles == ["bold", "bright_cyan", "bright_yellow"]
+    assert result.plain == "base main: unknown | no upstream"
 
 
-def test_format_base_details_dims_zero_counts() -> None:
-    result = format_base_details(_branch("x", base_branch="main", ahead=0, behind=0))
+def test_format_details_names_the_refs_and_colors_nonzero_counts() -> None:
+    result = format_details(
+        _branch(
+            "x",
+            base_branch="main",
+            ahead=2,
+            behind=3,
+            upstream="origin/x",
+            upstream_ahead=1,
+            upstream_behind=4,
+        )
+    )
 
-    assert result.plain == "vs main: +0 -0"
-    styles = [str(span.style) for span in result.spans]
-    assert styles == ["bold", "dim", "dim"]
+    assert result.plain == "base main: +2 -3 | upstream origin/x: +1 -4"
+    styles = [str(span.style) for span in result.spans if str(span.style) != "dim"]
+    assert styles == ["bold", "green", "red"] * 2
 
 
-def test_synced_status_avoids_bright_green_to_stay_green_under_solarized() -> None:
-    # Solarized remaps bright_green to a grey base tone, so the synced marker
-    # must use the same plain green as the current-branch highlight to stay
-    # green across terminal themes instead of clashing (rendering grey).
-    synced = format_status(_branch("x", track_status="="))
+def test_format_details_dims_zero_counts() -> None:
+    result = format_details(
+        _branch(
+            "x",
+            base_branch="main",
+            ahead=0,
+            behind=0,
+            upstream="origin/x",
+            upstream_ahead=0,
+            upstream_behind=0,
+        )
+    )
+
+    assert result.plain == "base main: +0 -0 | upstream origin/x: +0 -0"
+    count_styles = [str(span.style) for span in result.spans if str(span.style) != "bold"]
+    assert count_styles == ["dim"] * 5  # four zero counts plus the separator
+
+
+def test_current_branch_highlight_avoids_bright_green_under_solarized() -> None:
+    # Solarized remaps bright_green to a grey base tone, so the highlight must
+    # use plain green to stay green across terminal themes.
     highlight = format_branch_name("x", is_current=True)
 
     assert isinstance(highlight, Text)
-    assert "green" in str(synced.style)
-    assert "bright_green" not in str(synced.style)
+    assert "green" in str(highlight.style)
     assert "bright_green" not in str(highlight.style)
 
 
@@ -255,7 +242,7 @@ async def test_details_line_shows_base_distance_for_the_selected_branch() -> Non
         await pilot.pause()
 
         details = app.query_one("#details", Static)
-        assert "vs main: +1 -2" in str(details.content)
+        assert "base main: +1 -2" in str(details.content)
 
 
 async def test_details_line_follows_the_cursor() -> None:
@@ -272,6 +259,40 @@ async def test_details_line_follows_the_cursor() -> None:
 
         details = app.query_one("#details", Static)
         assert "no base branch found" in str(details.content)
+
+
+async def test_deleting_the_bottom_branch_moves_cursor_and_details_to_the_row_above() -> None:
+    branches = [
+        _branch("keep", base_branch="main", ahead=1, behind=0),
+        _branch("gone", track_status="=", is_merged=True),
+    ]
+    app = HopApp(branches, client=FakeGitClient(branches=branches))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        await pilot.press("j")
+        await pilot.press("d")  # synced branch deletes without confirmation
+
+        branch_list = app.query_one(BranchList)
+        assert branch_list.cursor_row == 0
+        details = app.query_one("#details", Static)
+        assert "base main: +1 -0" in str(details.content)
+
+
+async def test_mouse_clicks_do_not_move_the_cursor(
+    sample_branches: list[BranchInfo],
+) -> None:
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        branch_list = app.query_one(BranchList)
+        assert branch_list.cursor_row == 0
+
+        await pilot.click(BranchList, offset=(10, 1))  # second row
+
+        assert branch_list.cursor_row == 0
 
 
 async def test_remove_branch_is_noop_for_out_of_range_indices(

@@ -79,18 +79,17 @@ Actions:
   h          Show this help screen
   q          Quit application
 
-Status Indicators:
-  =          Branch synced with upstream (green)
-  <          Branch behind upstream (yellow)
-  >          Branch ahead of upstream (cyan)
-  <>         Branch diverged from upstream (red)
-  --         Loading metadata...
+List:
   *          Current branch marker
 
 Details Line (footer):
-  vs main: +a -b
+  base main: +a -b
              Selected branch is a commits ahead of
              and b commits behind its base branch
+  upstream origin/x: +a -b
+             Same comparison against the configured
+             upstream branch
+  --         Loading metadata...
                     """
                 )
             with Horizontal(id="close-button-container"):
@@ -308,53 +307,48 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
             self.dismiss(event.value)
 
 
-def format_status(branch: BranchInfo) -> Text:
-    """Color-code a branch's upstream tracking status for display.
-
-    = synced (green), < behind (yellow), > ahead (cyan),
-    <> diverged (red), -- loading or no upstream (dim).
-    """
-    if branch.is_loading:
-        return Text("--", style="dim")
-
-    status = branch.track_status if branch.track_status else "  "
-
-    if status == "=":
-        # Plain "green", not "bright_green": Solarized remaps bright_green to a
-        # grey base tone, which would render the synced marker grey and clash
-        # with the green current-branch highlight (see format_branch_name).
-        return Text(status, style="green")
-    elif status == "<":
-        return Text(status, style="bright_yellow")
-    elif status == ">":
-        return Text(status, style="bright_cyan")
-    elif status == "<>":
-        return Text(status, style="bright_red")
-    else:
-        return Text(status, style="dim")
-
-
-def format_base_details(branch: BranchInfo) -> Text:
-    """Details line for the selected branch: distance to its base branch.
-
-    Names the base the numbers refer to, e.g. ``vs main: +2 -5``. ``+n``
-    ahead in cyan and ``-n`` behind in yellow, matching the ``>``/``<``
-    upstream status colors; zero counts are dimmed.
-    """
-    if branch.is_loading:
-        return Text("--", style="dim")
-    if branch.base_branch is None:
-        return Text("no base branch found", style="dim")
-    if branch.ahead is None or branch.behind is None:
-        return Text(f"vs {branch.base_branch}: unknown", style="dim")
+def _format_comparison(
+    label: str, ref: str | None, ahead: int | None, behind: int | None, missing: str
+) -> Text:
+    if ref is None:
+        return Text(missing, style="dim")
+    if ahead is None or behind is None:
+        return Text(f"{label} {ref}: unknown", style="dim")
+    # Plain "green"/"red", not the bright variants: Solarized remaps bright
+    # slots to grey base tones (see format_branch_name).
     return Text.assemble(
-        "vs ",
-        (branch.base_branch, "bold"),
+        f"{label} ",
+        (ref, "bold"),
         ": ",
-        (f"+{branch.ahead}", "bright_cyan" if branch.ahead else "dim"),
+        (f"+{ahead}", "green" if ahead else "dim"),
         " ",
-        (f"-{branch.behind}", "bright_yellow" if branch.behind else "dim"),
+        (f"-{behind}", "red" if behind else "dim"),
     )
+
+
+def format_details(branch: BranchInfo) -> Text:
+    """Details line for the selected branch: distance to base and upstream.
+
+    Each comparison names the ref its numbers refer to, e.g.
+    ``base main: +2 -5 | upstream origin/x: +1 -0``. ``+n`` ahead in green and
+    ``-n`` behind in red; zero counts are dimmed.
+    """
+    if branch.is_loading:
+        return Text("--", style="dim")
+    details = _format_comparison(
+        "base", branch.base_branch, branch.ahead, branch.behind, missing="no base branch found"
+    )
+    details.append(" | ", style="dim")
+    details.append(
+        _format_comparison(
+            "upstream",
+            branch.upstream,
+            branch.upstream_ahead,
+            branch.upstream_behind,
+            missing="no upstream",
+        )
+    )
+    return details
 
 
 def format_branch_name(branch_name: str, is_current: bool) -> Text | str:
@@ -398,7 +392,6 @@ class BranchList(DataTable):  # type: ignore[misc]
 
         # Add columns
         self.add_column("Date", width=10)  # type: ignore[misc]
-        self.add_column("Status", width=4)  # type: ignore[misc]
         self.add_column("Branch", width=40)  # type: ignore[misc]
         self.add_column("Last Commit", width=None)  # type: ignore[misc]
 
@@ -407,9 +400,8 @@ class BranchList(DataTable):  # type: ignore[misc]
 
     def _add_branch_row(self, branch: BranchInfo) -> None:
         date_str = branch.creator_date.strftime("%Y-%m-%d")
-        status = format_status(branch)
         branch_name = format_branch_name(branch.name, branch.name == self.current_branch)
-        self.add_row(date_str, status, branch_name, branch.last_commit_message)  # type: ignore[misc]
+        self.add_row(date_str, branch_name, branch.last_commit_message)  # type: ignore[misc]
 
     def update_branch(self, branch: BranchInfo) -> None:
         """Refresh the row for ``branch``, matched by name.
@@ -430,13 +422,11 @@ class BranchList(DataTable):  # type: ignore[misc]
         self.branches[row_index] = branch
 
         date_str = branch.creator_date.strftime("%Y-%m-%d")
-        status = format_status(branch)
         branch_name = format_branch_name(branch.name, branch.name == self.current_branch)
 
         self.update_cell_at((row_index, 0), date_str)  # type: ignore[arg-type,misc]
-        self.update_cell_at((row_index, 1), status)  # type: ignore[arg-type,misc]
-        self.update_cell_at((row_index, 2), branch_name)  # type: ignore[arg-type,misc]
-        self.update_cell_at((row_index, 3), branch.last_commit_message)  # type: ignore[arg-type,misc]
+        self.update_cell_at((row_index, 1), branch_name)  # type: ignore[arg-type,misc]
+        self.update_cell_at((row_index, 2), branch.last_commit_message)  # type: ignore[arg-type,misc]
 
     def remove_branch(self, row_index: int) -> None:
         """Remove a branch from the list and table.
@@ -615,7 +605,7 @@ class HopApp(App[None]):
         branch_list = self.query_one(BranchList)
         content: Text | str = ""
         if 0 <= row_index < len(branch_list.branches):
-            content = format_base_details(branch_list.branches[row_index])
+            content = format_details(branch_list.branches[row_index])
         self.query_one("#details", Static).update(content)
 
     def action_cursor_down(self) -> None:

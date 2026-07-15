@@ -20,6 +20,9 @@ class BranchInfo:
     base_branch: str | None = None
     ahead: int | None = None
     behind: int | None = None
+    # Commit counts relative to the configured upstream; None without one.
+    upstream_ahead: int | None = None
+    upstream_behind: int | None = None
 
 
 _FORBIDDEN_BRANCH_CHARS = " \t~^:?*[\\"
@@ -176,6 +179,8 @@ class SubprocessGitClient:
                 track_status = parts[1]
 
         is_merged = False
+        upstream_ahead: int | None = None
+        upstream_behind: int | None = None
         if upstream:
             result = subprocess.run(
                 ["git", "merge-base", "--is-ancestor", branch.name, upstream],
@@ -183,6 +188,7 @@ class SubprocessGitClient:
                 check=False,
             )
             is_merged = result.returncode == 0
+            upstream_ahead, upstream_behind = self._count_ahead_behind(branch.name, upstream)
 
         # Measure the distance against the guessed main-line base
         # (main/master/...), not the configured upstream: upstream sync is
@@ -202,6 +208,8 @@ class SubprocessGitClient:
             base_branch=base_branch,
             ahead=ahead,
             behind=behind,
+            upstream_ahead=upstream_ahead,
+            upstream_behind=upstream_behind,
         )
 
     def _count_ahead_behind(

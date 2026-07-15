@@ -58,6 +58,8 @@ class FakeGitClient:
             base_branch=branch.base_branch,
             ahead=branch.ahead,
             behind=branch.behind,
+            upstream_ahead=branch.upstream_ahead,
+            upstream_behind=branch.upstream_behind,
         )
 
     def checkout_branch(self, branch_name: str) -> None:
