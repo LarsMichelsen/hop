@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None, client: GitClient | None = None) -> None
         sys.exit(1)
 
     if client is None:
-        client = SubprocessGitClient()
+        client = SubprocessGitClient(base_candidates=config.base_branches)
 
     if not client.is_git_repo():
         print("Error: Not a git repository", file=sys.stderr)

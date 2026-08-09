@@ -139,6 +139,12 @@ theme = "auto"
 # entry in [branch_prefixes].
 branch_prefix = ""
 
+# Candidate base branches for the ahead/behind counts and as rebase target,
+# in priority order. A branch's base is the candidate it most recently forked
+# from. Override when your mainline has an unconventional name:
+# base_branches = ["trunk"] or ["2.5.0", "2.4.0", "master"].
+base_branches = ["main", "master", "develop", "development"]
+
 [branch_prefixes]
 # Per-source-branch prefixes: creating a branch from one of these pre-fills the
 # input with the mapped prefix. Quote names containing dots or slashes —
@@ -153,6 +159,7 @@ develop = "feat/"
 | --- | --- |
 | `[ui] theme` | Color theme; `"auto"` adapts to the terminal. Cycle themes at runtime with `t` (always returns to the configured theme). |
 | `[defaults] branch_prefix` | Default prefix for new branch names. |
+| `[defaults] base_branches` | Base-branch candidates for ahead/behind counts and rebase, in priority order. |
 | `[branch_prefixes]` | Prefix overrides keyed by the source branch you create from. |
 
 ## Development

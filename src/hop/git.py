@@ -1,9 +1,14 @@
 """Git operations for hop."""
 
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
+
+# Conventional main-line names, in priority order: distance ties in base
+# detection fall to the earliest. Overridable via [defaults] base_branches.
+DEFAULT_BASE_BRANCHES: tuple[str, ...] = ("main", "master", "develop", "development")
 
 
 @dataclass
@@ -88,15 +93,12 @@ class GitClient(Protocol):
 class SubprocessGitClient:
     """Default GitClient: shells out to the `git` binary."""
 
-    # Conventional main-line names, in priority order: distance ties in
-    # _guess_base_branch fall to the earliest.
-    _BASE_CANDIDATES = ("main", "master", "develop", "development")
-
-    def __init__(self) -> None:
+    def __init__(self, base_candidates: Sequence[str] = DEFAULT_BASE_BRANCHES) -> None:
+        self._base_candidates = tuple(base_candidates)
         # Which base candidates exist as local refs. Probed lazily, refreshed
         # by get_branches_fast on the main thread so the threaded metadata
         # workers read one shared snapshot instead of each re-probing all
-        # candidates (4 subprocess spawns per branch).
+        # candidates (one subprocess spawn per candidate per branch).
         self._existing_bases: list[str] | None = None
 
     def is_git_repo(self) -> bool:
@@ -191,7 +193,7 @@ class SubprocessGitClient:
     def _probe_existing_bases(self) -> list[str]:
         return [
             base
-            for base in self._BASE_CANDIDATES
+            for base in self._base_candidates
             if subprocess.run(
                 ["git", "rev-parse", "--verify", f"refs/heads/{base}"],
                 capture_output=True,
@@ -278,8 +280,9 @@ class SubprocessGitClient:
         """Detect the base/upstream branch of the given branch.
 
         1. Use configured upstream if available
-        2. Otherwise pick the candidate (main/master/develop/development) the
-           branch most recently diverged from
+        2. Otherwise pick the base candidate (main/master/... or the
+           configured [defaults] base_branches) the branch most recently
+           diverged from
         3. Return None if cannot determine
         """
         result = subprocess.run(
@@ -368,7 +371,8 @@ class SubprocessGitClient:
         if base_branch is None:
             raise RuntimeError(
                 f"Cannot determine base branch for '{branch_name}'. "
-                "Please set an upstream branch or ensure the branch was created from main/master."
+                "Please set an upstream branch or ensure the branch was created from "
+                "one of the base branches (main/master/... or [defaults] base_branches)."
             )
 
         if worktree_path is None:

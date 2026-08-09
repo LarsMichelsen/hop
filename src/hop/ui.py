@@ -569,8 +569,13 @@ class HopApp(App[str | None]):
     ) -> None:
         super().__init__()
         self.branches = branches
-        self.client: GitClient = client if client is not None else SubprocessGitClient()
+        # Config first: the default client's base candidates come from it.
         self.config: Config = config if config is not None else load_config()
+        self.client: GitClient = (
+            client
+            if client is not None
+            else SubprocessGitClient(base_candidates=self.config.base_branches)
+        )
         # A child process cannot change the parent shell's directory, so
         # jumping only works when the shell wrapper passed --cd-file and
         # will cd to whatever path the app exits with.

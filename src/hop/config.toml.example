@@ -15,6 +15,11 @@ theme = "auto"
 [defaults]
 branch_prefix = ""
 
+# Candidate base branches for the ahead/behind counts and as rebase target,
+# in priority order. A branch's base is the candidate it most recently
+# forked from.
+base_branches = ["main", "master", "develop", "development"]
+
 # Branch-specific prefixes
 # Maps base branch names to prefixes for new branches created from them
 [branch_prefixes]

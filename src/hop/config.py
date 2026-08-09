@@ -4,6 +4,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any, cast
 
+from hop.git import DEFAULT_BASE_BRANCHES
 from hop.theme import is_known_theme
 
 
@@ -12,6 +13,8 @@ class Config:
     branch_prefixes: dict[str, str]
     default_branch_prefix: str
     theme: str = "auto"
+    # Candidates for base-branch detection, in priority order.
+    base_branches: tuple[str, ...] = DEFAULT_BASE_BRANCHES
 
 
 class ConfigError(RuntimeError):
@@ -86,12 +89,14 @@ def load_config(config_path: Path | None = None) -> Config:
     if theme != "auto" and not is_known_theme(theme):
         raise ConfigError(f"Invalid config {config_path}: unknown theme {theme!r}")
 
+    defaults = _table(data, "defaults", config_path)
     return Config(
         branch_prefixes=branch_prefixes,
-        default_branch_prefix=_string(
-            _table(data, "defaults", config_path), "defaults", "branch_prefix", "", config_path
-        ),
+        default_branch_prefix=_string(defaults, "defaults", "branch_prefix", "", config_path),
         theme=theme,
+        base_branches=_string_tuple(
+            defaults, "defaults", "base_branches", DEFAULT_BASE_BRANCHES, config_path
+        ),
     )
 
 
@@ -122,6 +127,25 @@ def _string(section: dict[str, Any], section_name: str, key: str, default: str, 
     if not isinstance(value, str):
         raise ConfigError(f"Invalid config {path}: [{section_name}] {key} must be a string")
     return value
+
+
+def _string_tuple(
+    section: dict[str, Any],
+    section_name: str,
+    key: str,
+    default: tuple[str, ...],
+    path: Path,
+) -> tuple[str, ...]:
+    value = section.get(key)
+    if value is None:
+        return default
+    if not isinstance(value, list) or not all(
+        isinstance(item, str) for item in cast(list[object], value)
+    ):
+        raise ConfigError(
+            f"Invalid config {path}: [{section_name}] {key} must be an array of strings"
+        )
+    return tuple(cast(list[str], value))
 
 
 def get_prefix_for_branch(branch_name: str, config: Config) -> str:

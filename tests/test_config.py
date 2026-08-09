@@ -77,6 +77,52 @@ branch_prefix = "feat/"
     assert config.branch_prefixes == {}
 
 
+def test_load_config_uses_conventional_base_branches_by_default(tmp_path: Path) -> None:
+    config = load_config(tmp_path / "missing.toml")
+
+    assert config.base_branches == ("main", "master", "develop", "development")
+
+
+def test_load_config_reads_base_branches_in_configured_order(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+[defaults]
+base_branches = ["2.5.0", "2.4.0", "master"]
+"""
+    )
+
+    config = load_config(config_file)
+
+    assert config.base_branches == ("2.5.0", "2.4.0", "master")
+
+
+def test_load_config_rejects_base_branches_that_is_not_an_array(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+[defaults]
+base_branches = "main"
+"""
+    )
+
+    with pytest.raises(ConfigError, match=r"base_branches must be an array of strings"):
+        load_config(config_file)
+
+
+def test_load_config_rejects_base_branches_with_a_non_string_entry(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+[defaults]
+base_branches = ["main", 5]
+"""
+    )
+
+    with pytest.raises(ConfigError, match=r"base_branches must be an array of strings"):
+        load_config(config_file)
+
+
 def test_load_config_returns_empty_config_when_file_is_empty(tmp_path: Path) -> None:
     config_file = tmp_path / "config.toml"
     config_file.write_text("")

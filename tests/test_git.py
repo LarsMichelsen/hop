@@ -426,6 +426,21 @@ def test_get_base_branch_falls_back_to_main_when_feature_forked_from_main(
     assert SubprocessGitClient().get_base_branch("feature") == "main"
 
 
+def test_get_base_branch_honours_configured_candidates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A mainline with an unconventional name is only found when configured;
+    # the default candidate set does not know "trunk".
+    _run_git(tmp_path, "init", "-b", "trunk")
+    _run_git(tmp_path, "commit", "--allow-empty", "-m", "trunk-1")
+    _run_git(tmp_path, "checkout", "-b", "feature")
+    _run_git(tmp_path, "commit", "--allow-empty", "-m", "feature-1")
+    monkeypatch.chdir(tmp_path)
+
+    assert SubprocessGitClient(base_candidates=("trunk",)).get_base_branch("feature") == "trunk"
+    assert SubprocessGitClient().get_base_branch("feature") is None
+
+
 def test_get_base_branch_skips_candidates_with_unrelated_history(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
