@@ -3,6 +3,7 @@
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
@@ -111,7 +112,7 @@ def test_get_branches_fast_returns_empty_list_when_git_output_is_empty() -> None
 def test_get_branches_fast_skips_refs_without_a_parseable_creator_date() -> None:
     mock_result = Mock()
     mock_result.returncode = 0
-    mock_result.stdout = "main\t2025-01-01\t\tInitial commit\nodd-ref\t\t\tno date\n"
+    mock_result.stdout = "main\t2025-01-01\t\t\t\tInitial commit\nodd-ref\t\t\t\t\tno date\n"
 
     with patch("subprocess.run", return_value=mock_result):
         branches = SubprocessGitClient().get_branches_fast()
@@ -119,10 +120,10 @@ def test_get_branches_fast_skips_refs_without_a_parseable_creator_date() -> None
     assert [b.name for b in branches] == ["main"]
 
 
-def test_get_branches_fast_skips_lines_that_lack_four_tab_separated_parts() -> None:
+def test_get_branches_fast_skips_lines_that_lack_six_tab_separated_parts() -> None:
     mock_result = Mock()
     mock_result.returncode = 0
-    mock_result.stdout = "main\t2025-01-01\t\tInitial commit\ninvalid_line\n"
+    mock_result.stdout = "main\t2025-01-01\t\t\t\tInitial commit\ninvalid_line\n"
 
     with patch("subprocess.run", return_value=mock_result):
         branches = SubprocessGitClient().get_branches_fast()
@@ -130,23 +131,43 @@ def test_get_branches_fast_skips_lines_that_lack_four_tab_separated_parts() -> N
         assert branches[0].name == "main"
 
 
-def test_fetch_branch_metadata_returns_no_upstream_when_for_each_ref_emits_only_separator() -> None:
-    branch = BranchInfo(
-        name="local-only",
-        creator_date=datetime.now(),
-        last_commit_message="Local commit",
+def test_get_branches_fast_reports_upstream_and_track_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git = ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test"]
+    subprocess.run([*git, "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        [*git, "commit", "--allow-empty", "-m", "init"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
     )
+    subprocess.run([*git, "branch", "tracked"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        [*git, "branch", "-u", "main", "tracked"], cwd=tmp_path, check=True, capture_output=True
+    )
+    monkeypatch.chdir(tmp_path)
 
+    branches = {b.name: b for b in SubprocessGitClient().get_branches_fast()}
+
+    assert branches["tracked"].upstream == "main"
+    assert branches["tracked"].track_status == "="
+    assert branches["main"].upstream is None
+    assert branches["main"].track_status == ""
+
+
+def test_get_branches_fast_parses_an_upstream_name_containing_a_pipe() -> None:
+    # An upstream ref may contain "|"; the tab field separator must keep it as
+    # part of the ref name rather than splitting the name from the status.
     mock_result = Mock()
     mock_result.returncode = 0
-    mock_result.stdout = "\t"
+    mock_result.stdout = "feature\t2025-01-01\t\torigin/feat|x\t<>\tsome commit\n"
 
     with patch("subprocess.run", return_value=mock_result):
-        updated = SubprocessGitClient().fetch_branch_metadata(branch)
-        assert updated.upstream is None
-        assert updated.track_status == ""
-        assert updated.is_merged is False
-        assert updated.is_loading is False
+        branches = SubprocessGitClient().get_branches_fast()
+
+    assert branches[0].upstream == "origin/feat|x"
+    assert branches[0].track_status == "<>"
 
 
 def test_fetch_branch_metadata_marks_branch_merged_when_merge_base_succeeds() -> None:
@@ -154,11 +175,9 @@ def test_fetch_branch_metadata_marks_branch_merged_when_merge_base_succeeds() ->
         name="feature",
         creator_date=datetime.now(),
         last_commit_message="Feature commit",
+        upstream="origin/feature",
+        track_status="=",
     )
-
-    mock_for_each_ref = Mock()
-    mock_for_each_ref.returncode = 0
-    mock_for_each_ref.stdout = "origin/feature\t="
 
     mock_merge_base = Mock()
     mock_merge_base.returncode = 0
@@ -173,8 +192,7 @@ def test_fetch_branch_metadata_marks_branch_merged_when_merge_base_succeeds() ->
 
     with patch(
         "subprocess.run",
-        side_effect=[mock_for_each_ref, mock_merge_base, mock_upstream_count]
-        + [mock_no_candidate] * 4,
+        side_effect=[mock_merge_base, mock_upstream_count] + [mock_no_candidate] * 4,
     ):
         updated = SubprocessGitClient().fetch_branch_metadata(branch)
         assert updated.upstream == "origin/feature"
@@ -190,11 +208,9 @@ def test_fetch_branch_metadata_marks_branch_unmerged_when_merge_base_fails() -> 
         name="feature",
         creator_date=datetime.now(),
         last_commit_message="Feature commit",
+        upstream="origin/feature",
+        track_status=">",
     )
-
-    mock_for_each_ref = Mock()
-    mock_for_each_ref.returncode = 0
-    mock_for_each_ref.stdout = "origin/feature\t>"
 
     mock_merge_base = Mock()
     mock_merge_base.returncode = 1
@@ -208,49 +224,13 @@ def test_fetch_branch_metadata_marks_branch_unmerged_when_merge_base_fails() -> 
 
     with patch(
         "subprocess.run",
-        side_effect=[mock_for_each_ref, mock_merge_base, mock_upstream_count]
-        + [mock_no_candidate] * 4,
+        side_effect=[mock_merge_base, mock_upstream_count] + [mock_no_candidate] * 4,
     ):
         updated = SubprocessGitClient().fetch_branch_metadata(branch)
-        assert updated.upstream == "origin/feature"
-        assert updated.track_status == ">"
         assert updated.is_merged is False
         assert updated.is_loading is False
         assert updated.upstream_ahead == 1
         assert updated.upstream_behind == 0
-
-
-def test_fetch_branch_metadata_parses_upstream_ref_name_containing_a_pipe() -> None:
-    # An upstream ref may contain "|"; the tab field separator must keep it as
-    # part of the ref name rather than splitting the name from the status.
-    branch = BranchInfo(
-        name="feature",
-        creator_date=datetime.now(),
-        last_commit_message="Feature commit",
-    )
-
-    mock_for_each_ref = Mock()
-    mock_for_each_ref.returncode = 0
-    mock_for_each_ref.stdout = "origin/feat|x\t<>"
-
-    mock_merge_base = Mock()
-    mock_merge_base.returncode = 1
-
-    mock_upstream_count = Mock()
-    mock_upstream_count.returncode = 0
-    mock_upstream_count.stdout = "2\t1"
-
-    mock_no_candidate = Mock()
-    mock_no_candidate.returncode = 1
-
-    with patch(
-        "subprocess.run",
-        side_effect=[mock_for_each_ref, mock_merge_base, mock_upstream_count]
-        + [mock_no_candidate] * 4,
-    ):
-        updated = SubprocessGitClient().fetch_branch_metadata(branch)
-        assert updated.upstream == "origin/feat|x"
-        assert updated.track_status == "<>"
 
 
 def test_fetch_branch_metadata_counts_commits_ahead_and_behind_the_base_branch(
@@ -292,9 +272,12 @@ def test_fetch_branch_metadata_counts_commits_against_the_upstream(
     )
     monkeypatch.chdir(tmp_path)
 
-    branch = BranchInfo(name="feature", creator_date=datetime.now(), last_commit_message="feat-1")
+    # The upstream now travels with the listing, so fetch what git reports
+    # instead of hand-building the BranchInfo.
+    client = SubprocessGitClient()
+    branch = next(b for b in client.get_branches_fast() if b.name == "feature")
 
-    updated = SubprocessGitClient().fetch_branch_metadata(branch)
+    updated = client.fetch_branch_metadata(branch)
 
     assert updated.upstream == "main"
     assert updated.upstream_ahead == 1
@@ -332,13 +315,13 @@ def test_fetch_branch_metadata_leaves_counts_unset_when_rev_list_fails() -> None
         last_commit_message="Feature commit",
     )
 
-    mock_no_upstream = Mock()
-    mock_no_upstream.returncode = 0
-    mock_no_upstream.stdout = "\t"
-
-    # The guess finds "main": ref exists, shares a merge-base, zero distance.
+    # The candidate probe finds only "main"; the guess then measures it:
+    # shares a merge-base at zero distance.
     mock_ref_exists = Mock()
     mock_ref_exists.returncode = 0
+
+    mock_no_candidate = Mock()
+    mock_no_candidate.returncode = 1
 
     mock_merge_base = Mock()
     mock_merge_base.returncode = 0
@@ -348,9 +331,6 @@ def test_fetch_branch_metadata_leaves_counts_unset_when_rev_list_fails() -> None
     mock_distance.returncode = 0
     mock_distance.stdout = "0\n"
 
-    mock_no_candidate = Mock()
-    mock_no_candidate.returncode = 1
-
     mock_rev_list = Mock()
     mock_rev_list.returncode = 128
     mock_rev_list.stdout = ""
@@ -358,11 +338,10 @@ def test_fetch_branch_metadata_leaves_counts_unset_when_rev_list_fails() -> None
     with patch(
         "subprocess.run",
         side_effect=[
-            mock_no_upstream,
             mock_ref_exists,
+            *[mock_no_candidate] * 3,
             mock_merge_base,
             mock_distance,
-            *[mock_no_candidate] * 3,
             mock_rev_list,
         ],
     ):
@@ -471,6 +450,9 @@ def test_get_base_branch_skips_candidate_when_commit_count_fails() -> None:
     mock_main_exists = Mock()
     mock_main_exists.returncode = 0
 
+    mock_no_branch = Mock()
+    mock_no_branch.returncode = 1
+
     mock_merge_base = Mock()
     mock_merge_base.returncode = 0
     mock_merge_base.stdout = "abc123\n"
@@ -479,19 +461,16 @@ def test_get_base_branch_skips_candidate_when_commit_count_fails() -> None:
     mock_count_fails.returncode = 1
     mock_count_fails.stdout = ""
 
-    mock_no_branch = Mock()
-    mock_no_branch.returncode = 1
-
     with patch(
         "subprocess.run",
         side_effect=[
             mock_no_upstream,
             mock_main_exists,
-            mock_merge_base,
-            mock_count_fails,
             mock_no_branch,  # master
             mock_no_branch,  # develop
             mock_no_branch,  # development
+            mock_merge_base,
+            mock_count_fails,
         ],
     ):
         assert SubprocessGitClient().get_base_branch("feature") is None
@@ -659,6 +638,58 @@ def test_validate_branch_name_rejects_invalid_names_with_a_reason(name: str) -> 
 
     assert reason is not None
     assert reason  # non-empty explanation
+
+
+# ---------------------------------------------------------------------------
+# Subprocess budget (performance regression guard)
+# ---------------------------------------------------------------------------
+
+
+def test_startup_load_stays_within_the_git_subprocess_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Startup cost is O(branches) with small constants; keep it that way.
+
+    Counts every git spawn for a full listing + metadata load. The number is
+    exact on purpose: a reintroduced per-branch ref lookup or per-branch
+    base-candidate probing fails this immediately. If the loading strategy
+    legitimately changes, re-derive the breakdown below.
+    """
+    git = ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test"]
+    subprocess.run([*git, "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        [*git, "commit", "--allow-empty", "-m", "init"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run([*git, "branch", "feature"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run([*git, "branch", "tracked"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        [*git, "branch", "-u", "main", "tracked"], cwd=tmp_path, check=True, capture_output=True
+    )
+    monkeypatch.chdir(tmp_path)
+
+    real_run = subprocess.run
+    calls: list[Any] = []
+
+    def counting_run(*args: Any, **kwargs: Any) -> Any:
+        calls.append(args[0])
+        return cast(subprocess.CompletedProcess[Any], real_run(*args, **kwargs))
+
+    monkeypatch.setattr(subprocess, "run", counting_run)
+
+    client = SubprocessGitClient()
+    branches = client.get_branches_fast()
+    for branch in branches:
+        client.fetch_branch_metadata(branch)
+
+    assert len(branches) == 3
+    # 1 listing + 4 base-candidate probes, then per branch:
+    #   main:    no upstream, no other base candidate            -> 0
+    #   feature: base guess (merge-base + count) + ahead/behind  -> 3
+    #   tracked: same + upstream is-ancestor + upstream count    -> 5
+    assert len(calls) == 1 + 4 + 0 + 3 + 5
 
 
 # ---------------------------------------------------------------------------

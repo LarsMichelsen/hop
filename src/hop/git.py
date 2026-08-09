@@ -88,6 +88,17 @@ class GitClient(Protocol):
 class SubprocessGitClient:
     """Default GitClient: shells out to the `git` binary."""
 
+    # Conventional main-line names, in priority order: distance ties in
+    # _guess_base_branch fall to the earliest.
+    _BASE_CANDIDATES = ("main", "master", "develop", "development")
+
+    def __init__(self) -> None:
+        # Which base candidates exist as local refs. Probed lazily, refreshed
+        # by get_branches_fast on the main thread so the threaded metadata
+        # workers read one shared snapshot instead of each re-probing all
+        # candidates (4 subprocess spawns per branch).
+        self._existing_bases: list[str] | None = None
+
     def is_git_repo(self) -> bool:
         result = subprocess.run(
             ["git", "rev-parse", "--git-dir"],
@@ -110,23 +121,25 @@ class SubprocessGitClient:
         return result.stdout.strip()
 
     def get_branches_fast(self) -> list[BranchInfo]:
-        """Get list of local branches with basic information only.
+        """Get list of local branches in a single git call.
 
-        Returns immediately with branch name, date, and last commit message.
-        Call fetch_branch_metadata for upstream and merge status.
+        Carries everything for-each-ref can compute in-process (upstream,
+        track status, worktree). Call fetch_branch_metadata for the fields
+        that need per-branch git calls (commit counts, merge status, base).
         """
-        # Tab-delimited, not "|": git permits "|" in ref names (and commit
-        # subjects), which would misalign the fields and crash the date parse.
-        # Tabs (and other control chars) are forbidden in ref names, and the
-        # subject is the trailing field, so a tab there is captured intact.
+        # Tab-delimited, not "|": git permits "|" in ref names (including the
+        # upstream) and commit subjects, which would misalign the fields and
+        # crash the date parse. Tabs (and other control chars) are forbidden
+        # in ref names, and the subject is the trailing field, so a tab there
+        # is captured intact.
         result = subprocess.run(
             [
                 "git",
                 "for-each-ref",
                 "refs/heads/",
                 "--sort=-creatordate",
-                "--format=%(refname:short)%09%(creatordate:short)"
-                "%09%(worktreepath)%09%(contents:subject)",
+                "--format=%(refname:short)%09%(creatordate:short)%09%(worktreepath)"
+                "%09%(upstream:short)%09%(upstream:trackshort)%09%(contents:subject)",
             ],
             capture_output=True,
             text=True,
@@ -143,11 +156,11 @@ class SubprocessGitClient:
         for line in result.stdout.splitlines():
             if not line:
                 continue
-            parts = line.split("\t", 3)
-            if len(parts) != 4:
+            parts = line.split("\t", 5)
+            if len(parts) != 6:
                 continue
 
-            name, date_str, worktree_path, message = parts
+            name, date_str, worktree_path, upstream, track_status, message = parts
             try:
                 date = datetime.strptime(date_str, "%Y-%m-%d")
             except ValueError:
@@ -161,55 +174,50 @@ class SubprocessGitClient:
                     name=name,
                     creator_date=date,
                     last_commit_message=message,
+                    upstream=upstream or None,
+                    track_status=track_status,
                     is_loading=True,
                     worktree_path=worktree_path or None,
                 )
             )
 
+        # Refresh the base-candidate snapshot while still on the main thread:
+        # every branch mutation triggers a re-listing, so the metadata workers
+        # spawned right after always see the current candidate set.
+        self._existing_bases = self._probe_existing_bases()
+
         return branches
 
+    def _probe_existing_bases(self) -> list[str]:
+        return [
+            base
+            for base in self._BASE_CANDIDATES
+            if subprocess.run(
+                ["git", "rev-parse", "--verify", f"refs/heads/{base}"],
+                capture_output=True,
+                check=False,
+            ).returncode
+            == 0
+        ]
+
     def fetch_branch_metadata(self, branch: BranchInfo) -> BranchInfo:
-        # Tab-delimited for the same reason as get_branches_fast: an upstream
-        # ref name may contain "|" but never a tab.
-        result = subprocess.run(
-            [
-                "git",
-                "for-each-ref",
-                f"refs/heads/{branch.name}",
-                "--format=%(upstream:short)%09%(upstream:trackshort)%09%(worktreepath)",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        """Compute the fields that need per-branch git calls.
 
-        upstream = None
-        track_status = ""
-        worktree_path = None
-
-        # rstrip("\n") only: .strip() would also eat the leading tabs of e.g.
-        # "\t\t/path" (no upstream, checked out in a worktree), shifting the
-        # path into the upstream field.
-        if result.returncode == 0:
-            parts = result.stdout.rstrip("\n").split("\t")
-            if len(parts) >= 1:
-                upstream = parts[0] if parts[0] else None
-            if len(parts) >= 2:
-                track_status = parts[1]
-            if len(parts) >= 3:
-                worktree_path = parts[2] if parts[2] else None
-
+        upstream, track_status and worktree_path already arrive with the
+        listing (one for-each-ref for all branches), so this only runs the
+        commit-count and merge-status calls that git cannot batch.
+        """
         is_merged = False
         upstream_ahead: int | None = None
         upstream_behind: int | None = None
-        if upstream:
+        if branch.upstream:
             result = subprocess.run(
-                ["git", "merge-base", "--is-ancestor", branch.name, upstream],
+                ["git", "merge-base", "--is-ancestor", branch.name, branch.upstream],
                 capture_output=True,
                 check=False,
             )
             is_merged = result.returncode == 0
-            upstream_ahead, upstream_behind = self._count_ahead_behind(branch.name, upstream)
+            upstream_ahead, upstream_behind = self._count_ahead_behind(branch.name, branch.upstream)
 
         # Measure the distance against the guessed main-line base
         # (main/master/...), not the configured upstream: upstream sync is
@@ -222,8 +230,8 @@ class SubprocessGitClient:
             name=branch.name,
             creator_date=branch.creator_date,
             last_commit_message=branch.last_commit_message,
-            upstream=upstream,
-            track_status=track_status,
+            upstream=branch.upstream,
+            track_status=branch.track_status,
             is_merged=is_merged,
             is_loading=False,
             base_branch=base_branch,
@@ -231,7 +239,7 @@ class SubprocessGitClient:
             behind=behind,
             upstream_ahead=upstream_ahead,
             upstream_behind=upstream_behind,
-            worktree_path=worktree_path,
+            worktree_path=branch.worktree_path,
         )
 
     def _count_ahead_behind(
@@ -310,22 +318,14 @@ class SubprocessGitClient:
         # candidate's merge-base from the branch tip and pick the nearest: the
         # base the branch most recently diverged from. Ties fall to the
         # earliest (conventional-name) candidate.
-        common_bases = ["main", "master", "develop", "development"]
+        if self._existing_bases is None:
+            self._existing_bases = self._probe_existing_bases()
 
         best_base: str | None = None
         best_distance: int | None = None
 
-        for base in common_bases:
+        for base in self._existing_bases:
             if base == branch_name:
-                continue
-
-            exists = subprocess.run(
-                ["git", "rev-parse", "--verify", f"refs/heads/{base}"],
-                capture_output=True,
-                check=False,
-            )
-
-            if exists.returncode != 0:
                 continue
 
             merge_base = subprocess.run(
