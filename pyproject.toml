@@ -34,7 +34,9 @@ asyncio_mode = "auto"
 # with generous headroom for slower CI runners. Catches hangs and dumps the
 # offending test's stack instead of blocking the run indefinitely.
 timeout = 30
-addopts = "--cov=hop --cov-report=term-missing --cov-report=term:skip-covered --cov-fail-under=75"
+# Ratchet: keep fail-under close below actual coverage (95.5% at last bump) so
+# regressions fail fast; raise it as coverage rises, never lower it.
+addopts = "--cov=hop --cov-report=term-missing --cov-report=term:skip-covered --cov-fail-under=93"
 
 [tool.coverage.run]
 source = ["src/hop"]
