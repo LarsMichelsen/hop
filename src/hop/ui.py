@@ -22,8 +22,6 @@ from hop.theme import next_theme, pick_terminal_fallback, resolve_theme
 
 
 class HelpScreen(ModalScreen[None]):  # type: ignore[misc]
-    """Modal screen showing keyboard shortcuts help."""
-
     CSS = """
     HelpScreen {
         align: center middle;
@@ -58,7 +56,6 @@ class HelpScreen(ModalScreen[None]):  # type: ignore[misc]
     """
 
     def compose(self) -> ComposeResult:
-        """Compose the help dialog."""
         with Container(id="help-dialog"):
             yield Label("Keyboard Shortcuts", id="help-title")
             with VerticalScroll(id="help-content"):
@@ -99,7 +96,6 @@ Details Line (footer):
                 yield Button("Close", variant="primary", id="close")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button press."""
         self.dismiss()
 
 
@@ -132,8 +128,6 @@ def delete_warning_message(track_status: str, is_merged: bool) -> str:
 
 
 class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
-    """Modal screen for confirming branch deletion."""
-
     CSS = """
     ConfirmDeleteScreen {
         align: center middle;
@@ -171,7 +165,6 @@ class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
         self.is_merged = is_merged
 
     def compose(self) -> ComposeResult:
-        """Compose the confirmation dialog."""
         # Build the message as a Rich Text so the warning can be highlighted
         # (bold + color) without markup parsing of the branch name and without
         # changing cell widths — styling keeps the dialog border aligned.
@@ -189,7 +182,6 @@ class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
                 yield Button("Cancel", variant="primary", id="cancel")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button press."""
         if event.button.id == "confirm":
             self.dismiss(True)
         else:
@@ -197,8 +189,6 @@ class ConfirmDeleteScreen(ModalScreen[bool]):  # type: ignore[misc]
 
 
 class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
-    """Modal screen for entering a new branch name."""
-
     CSS = """
     BranchNameInputScreen {
         align: center middle;
@@ -259,7 +249,6 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
         self.prefix = prefix
 
     def compose(self) -> ComposeResult:
-        """Compose the input dialog."""
         with Container(id="input-dialog"):
             yield Label(f"Create new branch from '{self.source_branch}'", id="input-title")
             yield Input(
@@ -273,7 +262,6 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
                 yield Button("Cancel", id="cancel")
 
     def on_mount(self) -> None:
-        """Focus the input field and set the initial validation state."""
         input_field = self.query_one(Input)
         input_field.focus()
         input_field.cursor_position = len(input_field.value)
@@ -292,11 +280,9 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
         return error is None
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Validate on every keystroke for immediate feedback."""
         self._refresh_validity(event.value)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button press."""
         if event.button.id == "create":
             input_field = self.query_one(Input)
             if self._refresh_validity(input_field.value):
@@ -305,7 +291,6 @@ class BranchNameInputScreen(ModalScreen[str | None]):  # type: ignore[misc]
             self.dismiss(None)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle Enter key in input field."""
         if self._refresh_validity(event.value):
             self.dismiss(event.value)
 
@@ -389,20 +374,16 @@ def format_status_message(message: str, prefix: str = "", prefix_style: str = ""
 
 
 class BranchList(DataTable):  # type: ignore[misc]
-    """Widget to display the list of branches."""
-
     def __init__(self, branches: list[BranchInfo], current_branch: str = "") -> None:
         super().__init__()
         self.branches = branches
         self.current_branch = current_branch
 
     def on_mount(self) -> None:
-        """Set up the table when mounted."""
         self.cursor_type = "row"
         self.zebra_stripes = True
         self.show_header = False
 
-        # Add columns
         self.add_column("Date", width=10)  # type: ignore[misc]
         self.add_column("Branch", width=40)  # type: ignore[misc]
         self.add_column("Last Commit", width=None)  # type: ignore[misc]
@@ -448,26 +429,17 @@ class BranchList(DataTable):  # type: ignore[misc]
         self.update_cell_at((row_index, 2), branch.last_commit_message)  # type: ignore[arg-type,misc]
 
     def remove_branch(self, row_index: int) -> None:
-        """Remove a branch from the list and table.
-
-        Args:
-            row_index: Index of the branch/row to remove
-        """
         if row_index < 0 or row_index >= len(self.branches):
             return
 
-        # Get the RowKey at the specified index from the ordered rows list
-        # ordered_rows contains Row objects, extract the key from the Row
+        # Rows must be removed by RowKey, not by cell value: row values are
+        # not unique (branches often share a creation date).
         row = list(self.ordered_rows)[row_index]  # type: ignore[misc]
         row_key = row.key  # type: ignore[misc]
 
-        # Remove row from table using the RowKey
         self.remove_row(row_key)  # type: ignore[misc]
-
-        # Remove from internal list
         del self.branches[row_index]
 
-        # Adjust cursor if needed
         if self.cursor_row >= len(self.branches) and len(self.branches) > 0:
             self.cursor_row = len(self.branches) - 1  # type: ignore[misc]
 
@@ -586,7 +558,6 @@ class HopApp(App[str | None]):
         return branch.worktree_path
 
     def compose(self) -> ComposeResult:
-        """Compose the UI."""
         yield BranchList(self.branches, self._current_branch_name())
         with Vertical(id="footer-container"):
             yield Static("", id="details")
@@ -599,7 +570,6 @@ class HopApp(App[str | None]):
             )
 
     def on_mount(self) -> None:
-        """Apply configured theme and start loading metadata when app is mounted."""
         resolved = resolve_theme(self.config.theme, os.environ)
         # Textual's theme catalog varies across versions (e.g. "textual-ansi"
         # was renamed to "ansi-dark"/"ansi-light" in 8.2.5). If the resolved
@@ -620,11 +590,9 @@ class HopApp(App[str | None]):
 
     @work(exclusive=False, thread=True)
     def load_metadata_for_branch(self, branch: BranchInfo) -> BranchInfo:
-        """Load metadata for a single branch in a background thread."""
         return self.client.fetch_branch_metadata(branch)
 
     def load_metadata(self) -> None:
-        """Start loading metadata for all branches."""
         for branch in self.branches:
             self.metadata_workers.append(self.load_metadata_for_branch(branch))
 
@@ -648,7 +616,6 @@ class HopApp(App[str | None]):
         self._update_details(event.cursor_row)  # type: ignore[misc]
 
     def _update_details(self, row_index: int) -> None:
-        """Show base-branch distance details for the branch at ``row_index``."""
         branch_list = self.query_one(BranchList)
         content: Text | str = ""
         if 0 <= row_index < len(branch_list.branches):
@@ -657,21 +624,15 @@ class HopApp(App[str | None]):
         self.query_one("#details", Static).update(content)
 
     def action_cursor_down(self) -> None:
-        """Move cursor down."""
-        branch_list = self.query_one(BranchList)
-        branch_list.action_cursor_down()
+        self.query_one(BranchList).action_cursor_down()
 
     def action_cursor_up(self) -> None:
-        """Move cursor up."""
-        branch_list = self.query_one(BranchList)
-        branch_list.action_cursor_up()
+        self.query_one(BranchList).action_cursor_up()
 
     def action_help(self) -> None:
-        """Show help screen with keyboard shortcuts."""
         self.push_screen(HelpScreen())
 
     def action_checkout(self) -> None:
-        """Checkout the selected branch."""
         branch_list = self.query_one(BranchList)
         cursor_row = branch_list.cursor_row
         if cursor_row < 0 or cursor_row >= len(self.branches):
@@ -691,14 +652,11 @@ class HopApp(App[str | None]):
         try:
             self.client.checkout_branch(branch.name)
             self.show_success(f"Checked out branch: {branch.name}")
-            # Refresh the branch list to show the updated current branch
-            # Pass the branch name to restore focus after refresh
             self.refresh_branches(focus_branch_name=branch.name)
         except RuntimeError as e:
             self.show_error(str(e))
 
     def action_rebase(self) -> None:
-        """Rebase the selected branch onto its base."""
         branch_list = self.query_one(BranchList)
         cursor_row = branch_list.cursor_row
         if cursor_row < 0 or cursor_row >= len(self.branches):
@@ -712,14 +670,11 @@ class HopApp(App[str | None]):
                 self.show_success(f"Rebased to branch: {branch.name}")
             else:
                 self.show_success(f"Rebased branch {branch.name} in worktree {worktree}")
-            # Refresh the branch list to show the updated state
-            # Pass the branch name to restore focus after refresh
             self.refresh_branches(focus_branch_name=branch.name)
         except RuntimeError as e:
             self.show_error(str(e))
 
     def action_delete(self) -> None:
-        """Delete the selected branch."""
         branch_list = self.query_one(BranchList)
         cursor_row = branch_list.cursor_row
         if cursor_row < 0 or cursor_row >= len(self.branches):
@@ -734,12 +689,10 @@ class HopApp(App[str | None]):
             self.show_error(f"Cannot delete '{branch.name}': checked out in worktree {worktree}")
             return
 
-        # If branch is synced with upstream (track_status == "="), delete without confirmation
-        # Otherwise, show confirmation dialog
+        # A branch synced with its upstream is safe to delete without asking.
         if branch.track_status == "=" and not branch.is_loading:
             self._perform_delete(branch.name, cursor_row)
         else:
-            # Show confirmation dialog - pass cursor_row through
             self.push_screen(
                 ConfirmDeleteScreen(branch.name, branch.track_status, branch.is_merged),
                 lambda confirmed: self._handle_delete_confirmation(
@@ -750,24 +703,13 @@ class HopApp(App[str | None]):
     def _handle_delete_confirmation(
         self, confirmed: bool | None, branch_name: str, row_index: int
     ) -> None:
-        """Handle the result of delete confirmation.
-
-        Args:
-            confirmed: Whether user confirmed the deletion
-            branch_name: Name of the branch to delete
-            row_index: Index of the branch in the list
-        """
         if confirmed is True:
             self._perform_delete(branch_name, row_index)
 
     def _perform_delete(self, branch_name: str, row_index: int) -> None:
-        """Perform the actual branch deletion.
-
-        Args:
-            branch_name: Name of the branch to delete
-            row_index: Index of the branch in the list at the time of action
-        """
-        # Verify the branch at row_index still matches the name
+        # row_index was captured when the action started; the list may have
+        # changed while the confirmation dialog was open, so verify the row
+        # still holds the branch the user confirmed.
         if row_index < 0 or row_index >= len(self.branches):
             self.show_error("Branch index out of range")
             return
@@ -785,7 +727,6 @@ class HopApp(App[str | None]):
                 worker.cancel()  # type: ignore[misc]
                 del self.metadata_workers[row_index]
 
-            # Remove from branches list and update UI
             branch_list = self.query_one(BranchList)
             branch_list.remove_branch(row_index)
             # The cursor may now rest on a different branch (or none).
@@ -797,7 +738,6 @@ class HopApp(App[str | None]):
             self.show_error(str(e))
 
     def action_new_branch(self) -> None:
-        """Create a new branch from the selected branch."""
         branch_list = self.query_one(BranchList)
         cursor_row = branch_list.cursor_row
         if cursor_row < 0 or cursor_row >= len(self.branches):
@@ -813,15 +753,9 @@ class HopApp(App[str | None]):
         )
 
     def handle_new_branch_input(self, branch_name: str | None) -> None:
-        """Handle the result of branch name input.
-
-        Args:
-            branch_name: Name entered by user, or None if cancelled
-        """
-        if branch_name is None:
+        if branch_name is None:  # cancelled
             return
 
-        # Get the currently selected branch as source
         branch_list = self.query_one(BranchList)
         cursor_row = branch_list.cursor_row
         if cursor_row < 0 or cursor_row >= len(self.branches):
@@ -834,45 +768,33 @@ class HopApp(App[str | None]):
             self.client.create_branch(source_branch.name, branch_name)
             self.client.checkout_branch(branch_name)
             self.show_success(f"Created and checked out branch: {branch_name}")
-            # Refresh the branch list and move cursor to the new branch
             self.refresh_branches(focus_branch_name=branch_name)
         except RuntimeError as e:
             self.show_error(str(e))
 
     def refresh_branches(self, focus_branch_name: str | None = None) -> None:
-        """Refresh the branch list after creating a new branch.
+        """Rebuild the branch list from git and restart metadata loading.
 
-        Args:
-            focus_branch_name: Optional branch name to focus after refresh.
-                If provided, cursor will move to this branch in the new list.
-                If None, cursor position (row index) will be preserved.
+        Moves the cursor to ``focus_branch_name`` when given; otherwise the
+        current row index is kept (clamped to the new list).
         """
         try:
-            # Get updated branch list
             new_branches = self.client.get_branches_fast()
-
-            # Update app's branch list
             self.branches = new_branches
 
-            # Cancel all existing metadata workers
             for worker in self.metadata_workers:
                 worker.cancel()  # type: ignore[misc]
             self.metadata_workers.clear()
 
-            # Get the current branch list widget and save cursor position
             old_branch_list = self.query_one(BranchList)
             old_cursor_row = old_branch_list.cursor_row
-
-            # Remove old branch list
             old_branch_list.remove()
 
-            # Create and mount new branch list
             new_branch_list = BranchList(new_branches, self._current_branch_name())
-            self.mount(new_branch_list, before=1)  # Mount before Footer
+            # before=1: keep the table above the footer container.
+            self.mount(new_branch_list, before=1)
 
-            # Restore cursor position
             if focus_branch_name is not None:
-                # Find the branch by name in the new list
                 for idx, branch in enumerate(new_branches):
                     if branch.name == focus_branch_name:
                         new_branch_list.move_cursor(row=idx)  # type: ignore[misc]
@@ -881,35 +803,28 @@ class HopApp(App[str | None]):
                     # Branch not found (shouldn't happen), fall back to first row
                     if len(new_branches) > 0:
                         new_branch_list.move_cursor(row=0)  # type: ignore[misc]
-            else:
-                # Restore cursor position by row index (ensure it's within bounds)
-                if 0 <= old_cursor_row < len(new_branches):
-                    new_branch_list.move_cursor(row=old_cursor_row)  # type: ignore[misc]
-                elif len(new_branches) > 0:
-                    new_branch_list.move_cursor(row=0)  # type: ignore[misc]
+            elif 0 <= old_cursor_row < len(new_branches):
+                new_branch_list.move_cursor(row=old_cursor_row)  # type: ignore[misc]
+            elif len(new_branches) > 0:
+                new_branch_list.move_cursor(row=0)  # type: ignore[misc]
 
-            # Restore focus to the branch list
             new_branch_list.focus()
             # Cursor restoration may keep the same row index, which emits no
             # RowHighlighted, so refresh the details line explicitly.
             self._update_details(new_branch_list.cursor_row)
 
-            # Start loading metadata for new branches
             self.load_metadata()
 
         except RuntimeError as e:
             self.show_error(f"Could not refresh branches: {e}")
 
     def show_status(self, message: str) -> None:
-        """Show a neutral status message."""
         self._render_status(format_status_message(message))
 
     def show_success(self, message: str) -> None:
-        """Show a success message with a green ``[OK]`` prefix."""
         self._render_status(format_status_message(message, "OK", "bold green"))
 
     def show_error(self, message: str) -> None:
-        """Show an error message with a red ``[Error]`` prefix."""
         self._render_status(format_status_message(message, "Error", "bold red"))
 
     def _render_status(self, content: str | Text) -> None:
