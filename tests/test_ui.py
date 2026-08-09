@@ -909,6 +909,28 @@ async def test_in_flight_metadata_lands_on_its_own_branch_after_a_delete() -> No
         }
 
 
+async def test_failed_metadata_load_resolves_the_row_and_reports_the_error() -> None:
+    # One flaky git call must neither exit the app (Textual kills it on an
+    # errored worker by default) nor leave the row on the loading marker
+    # forever: the branch resolves with unknown metadata and the status line
+    # says why.
+    branches = [_branch("main", is_loading=True, track_status="=")]
+    client = FakeGitClient(branches=branches)
+    client.fetch_metadata_error = RuntimeError("git exploded")
+    app = HopApp(list(branches), client=client)
+
+    async with app.run_test() as pilot:
+        await _drain_workers(app, pilot)
+
+        assert app.is_running
+        rows = app.query_one(BranchList).branches
+        assert [b.is_loading for b in rows] == [False]
+        # The listing data (here: the track status) survives the failed load.
+        assert rows[0].track_status == "="
+        status = app.query_one("#status", Static)
+        assert "[Error] Could not load metadata for 'main': git exploded" in str(status.content)
+
+
 # ---------------------------------------------------------------------------
 # New branch (n)
 # ---------------------------------------------------------------------------

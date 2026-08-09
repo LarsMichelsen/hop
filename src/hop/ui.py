@@ -1,6 +1,8 @@
 """Text-based UI for hop."""
 
+import contextlib
 import os
+from dataclasses import replace
 from typing import ClassVar, cast
 
 from rich.text import Text
@@ -631,7 +633,21 @@ class HopApp(App[str | None]):
 
     @work(exclusive=False, thread=True)
     def load_metadata_for_branch(self, branch: BranchInfo) -> BranchInfo:
-        return self.client.fetch_branch_metadata(branch)
+        try:
+            return self.client.fetch_branch_metadata(branch)
+        except Exception as e:
+            # A failed load must not kill the app (an errored worker exits it
+            # by default) or strand the row on the loading marker. Resolve the
+            # branch with its per-branch fields unknown — everything from the
+            # fast listing is still valid — and surface the failure in the
+            # status line.
+            # suppress: call_from_thread raises RuntimeError when the app is
+            # already shutting down; the status line is moot at that point.
+            with contextlib.suppress(RuntimeError):
+                self.call_from_thread(
+                    self.show_error, f"Could not load metadata for '{branch.name}': {e}"
+                )
+            return replace(branch, is_loading=False)
 
     def load_metadata(self) -> None:
         for branch in self.branches:

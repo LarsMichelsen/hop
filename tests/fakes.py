@@ -30,6 +30,7 @@ class FakeGitClient:
 
         self.get_current_branch_error: Exception | None = None
         self.get_branches_error: Exception | None = None
+        self.fetch_metadata_error: Exception | None = None
         self.checkout_error: Exception | None = None
         self.delete_error: Exception | None = None
         self.rebase_error: Exception | None = None
@@ -50,6 +51,8 @@ class FakeGitClient:
         return list(self._branches)
 
     def fetch_branch_metadata(self, branch: BranchInfo) -> BranchInfo:
+        if self.fetch_metadata_error is not None:
+            raise self.fetch_metadata_error
         return BranchInfo(
             name=branch.name,
             creator_date=branch.creator_date,
