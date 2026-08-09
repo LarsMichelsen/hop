@@ -113,6 +113,14 @@ consistent with it:
 - `docs/TEST_CLASSIFICATION.md` — test classification and architecture (unit,
   component, integration, system/E2E) and where each kind belongs.
 
+## TUI Verification
+
+After changes that affect the TUI's rendering or interaction (`ui.py`,
+`theme.py`), verify at the real terminal surface with the `verify` skill
+(`.claude/skills/verify/`): it drives the actual `hop` process in a pty
+against a scratch repo. The pilot-based unit tests do not catch
+real-terminal rendering or focus issues.
+
 ## Documentation
 
 Full workflow documentation: `docs/DEVELOPMENT.md`
