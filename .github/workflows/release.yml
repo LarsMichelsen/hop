@@ -8,6 +8,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Dedicated environment so the PyPI trusted publisher can be pinned to it,
+    # limiting what other workflows in this repo could publish.
+    environment: pypi
     permissions:
       # Create the GitHub Release.
       contents: write
@@ -30,7 +33,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       # The tag may have been pushed without waiting for CI on the commit;
       # never publish an artifact that does not pass the full check suite.

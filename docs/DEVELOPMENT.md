@@ -144,7 +144,8 @@ The pre-commit hook list lives in `prek.toml`.
 ## CI
 
 `.github/workflows/ci.yml` runs the same four prek checks on every push to
-`main` and every pull request, across all supported Python versions.
+`main` and every pull request, on Linux and macOS across all supported
+Python versions.
 
 ## Releasing
 
