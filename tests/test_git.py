@@ -18,6 +18,7 @@ from hop.git import (
     get_branches_fast,
     get_current_branch,
     is_git_repo,
+    rebase_to_branch,
     validate_branch_name,
 )
 
@@ -120,10 +121,10 @@ def test_get_branches_fast_returns_empty_list_when_git_output_is_empty() -> None
         assert branches == []
 
 
-def test_get_branches_fast_skips_lines_that_lack_three_tab_separated_parts() -> None:
+def test_get_branches_fast_skips_lines_that_lack_four_tab_separated_parts() -> None:
     mock_result = Mock()
     mock_result.returncode = 0
-    mock_result.stdout = "main\t2025-01-01\tInitial commit\ninvalid_line\n"
+    mock_result.stdout = "main\t2025-01-01\t\tInitial commit\ninvalid_line\n"
 
     with patch("subprocess.run", return_value=mock_result):
         branches = get_branches_fast()
@@ -660,3 +661,110 @@ def test_validate_branch_name_rejects_invalid_names_with_a_reason(name: str) -> 
 
     assert reason is not None
     assert reason  # non-empty explanation
+
+
+# ---------------------------------------------------------------------------
+# Worktree awareness
+# ---------------------------------------------------------------------------
+
+
+def _init_repo_with_feature_worktree(tmp_path: Path) -> tuple[list[str], Path, Path]:
+    """Repo at tmp_path/repo on main, plus tmp_path/wt holding branch feature."""
+    git = ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test"]
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run([*git, "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        [*git, "commit", "--allow-empty", "-m", "init"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run([*git, "branch", "feature"], cwd=repo, check=True, capture_output=True)
+    worktree = tmp_path / "wt"
+    subprocess.run(
+        [*git, "worktree", "add", str(worktree), "feature"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    return git, repo, worktree
+
+
+def test_get_branches_fast_reports_the_worktree_holding_each_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git, repo, worktree = _init_repo_with_feature_worktree(tmp_path)
+    subprocess.run([*git, "branch", "idle"], cwd=repo, check=True, capture_output=True)
+    monkeypatch.chdir(repo)
+
+    branches = {b.name: b for b in get_branches_fast()}
+
+    assert branches["idle"].worktree_path is None
+    assert branches["feature"].worktree_path is not None
+    assert Path(branches["feature"].worktree_path).resolve() == worktree.resolve()
+    assert branches["main"].worktree_path is not None
+    assert Path(branches["main"].worktree_path).resolve() == repo.resolve()
+
+
+def test_fetch_branch_metadata_reports_the_worktree_holding_the_branch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _git, repo, worktree = _init_repo_with_feature_worktree(tmp_path)
+    monkeypatch.chdir(repo)
+    listed = next(b for b in get_branches_fast() if b.name == "feature")
+
+    loaded = fetch_branch_metadata(listed)
+
+    assert loaded.worktree_path is not None
+    assert Path(loaded.worktree_path).resolve() == worktree.resolve()
+
+
+def test_rebase_in_another_worktree_updates_the_branch_without_switching_here(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git, repo, worktree = _init_repo_with_feature_worktree(tmp_path)
+    (worktree / "feature.txt").write_text("feature\n")
+    subprocess.run([*git, "add", "."], cwd=worktree, check=True, capture_output=True)
+    subprocess.run(
+        [*git, "commit", "-m", "feature work"], cwd=worktree, check=True, capture_output=True
+    )
+    subprocess.run(
+        [*git, "commit", "--allow-empty", "-m", "main moved on"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    monkeypatch.chdir(repo)
+
+    rebase_to_branch("feature", str(worktree))
+
+    head_here = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo, capture_output=True, text=True
+    )
+    assert head_here.stdout.strip() == "main"
+    rebased = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", "main", "feature"], cwd=repo, capture_output=True
+    )
+    assert rebased.returncode == 0
+
+
+def test_rebase_in_another_worktree_aborts_a_conflicting_rebase(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git, repo, worktree = _init_repo_with_feature_worktree(tmp_path)
+    (worktree / "clash.txt").write_text("feature version\n")
+    subprocess.run([*git, "add", "."], cwd=worktree, check=True, capture_output=True)
+    subprocess.run(
+        [*git, "commit", "-m", "feature side"], cwd=worktree, check=True, capture_output=True
+    )
+    (repo / "clash.txt").write_text("main version\n")
+    subprocess.run([*git, "add", "."], cwd=repo, check=True, capture_output=True)
+    subprocess.run([*git, "commit", "-m", "main side"], cwd=repo, check=True, capture_output=True)
+    monkeypatch.chdir(repo)
+
+    with pytest.raises(RuntimeError, match="rebase aborted"):
+        rebase_to_branch("feature", str(worktree))
+
+    status = subprocess.run(["git", "-C", str(worktree), "status"], capture_output=True, text=True)
+    assert "rebase in progress" not in status.stdout

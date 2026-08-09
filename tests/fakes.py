@@ -25,9 +25,10 @@ class FakeGitClient:
 
         self.checkout_calls: list[str] = []
         self.delete_calls: list[str] = []
-        self.rebase_calls: list[str] = []
+        self.rebase_calls: list[tuple[str, str | None]] = []
         self.create_calls: list[tuple[str, str]] = []
 
+        self.get_current_branch_error: Exception | None = None
         self.get_branches_error: Exception | None = None
         self.checkout_error: Exception | None = None
         self.delete_error: Exception | None = None
@@ -39,6 +40,8 @@ class FakeGitClient:
         return self._is_repo
 
     def get_current_branch(self) -> str:
+        if self.get_current_branch_error is not None:
+            raise self.get_current_branch_error
         return self._current_branch
 
     def get_branches_fast(self) -> list[BranchInfo]:
@@ -60,6 +63,7 @@ class FakeGitClient:
             behind=branch.behind,
             upstream_ahead=branch.upstream_ahead,
             upstream_behind=branch.upstream_behind,
+            worktree_path=branch.worktree_path,
         )
 
     def checkout_branch(self, branch_name: str) -> None:
@@ -71,8 +75,8 @@ class FakeGitClient:
     def get_base_branch(self, branch_name: str) -> str | None:
         return self.base_branch
 
-    def rebase_to_branch(self, branch_name: str) -> None:
-        self.rebase_calls.append(branch_name)
+    def rebase_to_branch(self, branch_name: str, worktree_path: str | None = None) -> None:
+        self.rebase_calls.append((branch_name, worktree_path))
         if self.rebase_error is not None:
             raise self.rebase_error
 

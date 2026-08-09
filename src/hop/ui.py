@@ -1,6 +1,5 @@
 """Text-based UI for hop."""
 
-import contextlib
 import os
 from typing import ClassVar
 
@@ -17,7 +16,6 @@ from hop.git import (
     BranchInfo,
     GitClient,
     SubprocessGitClient,
-    get_current_branch,
     validate_branch_name,
 )
 from hop.theme import pick_terminal_fallback, resolve_theme, toggle_dark_light
@@ -81,6 +79,7 @@ Actions:
 
 List:
   *          Current branch marker
+  +          Checked out in another worktree
 
 Details Line (footer):
   base main: +a -b
@@ -89,6 +88,8 @@ Details Line (footer):
   upstream origin/x: +a -b
              Same comparison against the configured
              upstream branch
+  worktree /path
+             Worktree holding the selected branch
   --         Loading metadata...
                     """
                 )
@@ -326,12 +327,13 @@ def _format_comparison(
     )
 
 
-def format_details(branch: BranchInfo) -> Text:
+def format_details(branch: BranchInfo, in_other_worktree: bool = False) -> Text:
     """Details line for the selected branch: distance to base and upstream.
 
     Each comparison names the ref its numbers refer to, e.g.
     ``base main: +2 -5 | upstream origin/x: +1 -0``. ``+n`` ahead in green and
-    ``-n`` behind in red; zero counts are dimmed.
+    ``-n`` behind in red; zero counts are dimmed. When the branch is checked
+    out in another worktree, that worktree's path is appended.
     """
     if branch.is_loading:
         return Text("--", style="dim")
@@ -348,17 +350,27 @@ def format_details(branch: BranchInfo) -> Text:
             missing="no upstream",
         )
     )
+    if in_other_worktree and branch.worktree_path:
+        details.append(" | ", style="dim")
+        details.append("worktree ")
+        details.append(branch.worktree_path, style="bold")
     return details
 
 
-def format_branch_name(branch_name: str, is_current: bool) -> Text | str:
-    """Highlight the current branch: a green ``*`` marker and a bold green name.
+def format_branch_name(
+    branch_name: str, is_current: bool, in_other_worktree: bool = False
+) -> Text | str:
+    """Mark the current branch (``*``) and branches checked out in another
+    worktree (``+``, mirroring ``git branch``).
 
-    Uses plain ``green`` (not ``bright_green``, which Solarized remaps to a grey
-    base tone) so the highlight stays green across terminal themes.
+    Uses plain ``green``/``cyan`` (not the bright variants, which Solarized
+    remaps to grey base tones) so the markers keep their color across
+    terminal themes.
     """
     if is_current:
         return Text(f"* {branch_name}", style="bold green")
+    if in_other_worktree:
+        return Text(f"+ {branch_name}", style="cyan")
     return branch_name
 
 
@@ -377,12 +389,10 @@ def format_status_message(message: str, prefix: str = "", prefix_style: str = ""
 class BranchList(DataTable):  # type: ignore[misc]
     """Widget to display the list of branches."""
 
-    def __init__(self, branches: list[BranchInfo]) -> None:
+    def __init__(self, branches: list[BranchInfo], current_branch: str = "") -> None:
         super().__init__()
         self.branches = branches
-        self.current_branch = ""
-        with contextlib.suppress(RuntimeError):
-            self.current_branch = get_current_branch()
+        self.current_branch = current_branch
 
     def on_mount(self) -> None:
         """Set up the table when mounted."""
@@ -398,9 +408,14 @@ class BranchList(DataTable):  # type: ignore[misc]
         for branch in self.branches:
             self._add_branch_row(branch)
 
+    def in_other_worktree(self, branch: BranchInfo) -> bool:
+        return branch.worktree_path is not None and branch.name != self.current_branch
+
     def _add_branch_row(self, branch: BranchInfo) -> None:
         date_str = branch.creator_date.strftime("%Y-%m-%d")
-        branch_name = format_branch_name(branch.name, branch.name == self.current_branch)
+        branch_name = format_branch_name(
+            branch.name, branch.name == self.current_branch, self.in_other_worktree(branch)
+        )
         self.add_row(date_str, branch_name, branch.last_commit_message)  # type: ignore[misc]
 
     def update_branch(self, branch: BranchInfo) -> None:
@@ -422,7 +437,9 @@ class BranchList(DataTable):  # type: ignore[misc]
         self.branches[row_index] = branch
 
         date_str = branch.creator_date.strftime("%Y-%m-%d")
-        branch_name = format_branch_name(branch.name, branch.name == self.current_branch)
+        branch_name = format_branch_name(
+            branch.name, branch.name == self.current_branch, self.in_other_worktree(branch)
+        )
 
         self.update_cell_at((row_index, 0), date_str)  # type: ignore[arg-type,misc]
         self.update_cell_at((row_index, 1), branch_name)  # type: ignore[arg-type,misc]
@@ -538,9 +555,25 @@ class HopApp(App[None]):
         self.config: Config = config if config is not None else load_config()
         self.metadata_workers: list[Worker[BranchInfo]] = []
 
+    def _current_branch_name(self) -> str:
+        try:
+            return self.client.get_current_branch()
+        except RuntimeError:
+            return ""
+
+    def _other_worktree_path(self, branch: BranchInfo) -> str | None:
+        """Path of the other worktree holding ``branch``, or None.
+
+        None both for branches not checked out anywhere and for the current
+        branch (whose worktree is the one hop runs in).
+        """
+        if branch.worktree_path is None or branch.name == self._current_branch_name():
+            return None
+        return branch.worktree_path
+
     def compose(self) -> ComposeResult:
         """Compose the UI."""
-        yield BranchList(self.branches)
+        yield BranchList(self.branches, self._current_branch_name())
         with Vertical(id="footer-container"):
             yield Static("", id="details")
             yield Static("Ready", id="status")
@@ -605,7 +638,8 @@ class HopApp(App[None]):
         branch_list = self.query_one(BranchList)
         content: Text | str = ""
         if 0 <= row_index < len(branch_list.branches):
-            content = format_details(branch_list.branches[row_index])
+            branch = branch_list.branches[row_index]
+            content = format_details(branch, branch_list.in_other_worktree(branch))
         self.query_one("#details", Static).update(content)
 
     def action_cursor_down(self) -> None:
@@ -630,6 +664,10 @@ class HopApp(App[None]):
             return
 
         branch = self.branches[cursor_row]
+        if (worktree := self._other_worktree_path(branch)) is not None:
+            self.show_error(f"Branch '{branch.name}' is checked out in worktree {worktree}")
+            return
+
         try:
             self.client.checkout_branch(branch.name)
             self.show_success(f"Checked out branch: {branch.name}")
@@ -647,9 +685,13 @@ class HopApp(App[None]):
             return
 
         branch = self.branches[cursor_row]
+        worktree = self._other_worktree_path(branch)
         try:
-            self.client.rebase_to_branch(branch.name)
-            self.show_success(f"Rebased to branch: {branch.name}")
+            self.client.rebase_to_branch(branch.name, worktree)
+            if worktree is None:
+                self.show_success(f"Rebased to branch: {branch.name}")
+            else:
+                self.show_success(f"Rebased branch {branch.name} in worktree {worktree}")
             # Refresh the branch list to show the updated state
             # Pass the branch name to restore focus after refresh
             self.refresh_branches(focus_branch_name=branch.name)
@@ -664,6 +706,13 @@ class HopApp(App[None]):
             return
 
         branch = self.branches[cursor_row]
+
+        # git refuses to delete a branch checked out in any worktree; catch it
+        # here with a clear message instead of surfacing git's raw error after
+        # a pointless confirmation dialog.
+        if (worktree := self._other_worktree_path(branch)) is not None:
+            self.show_error(f"Cannot delete '{branch.name}': checked out in worktree {worktree}")
+            return
 
         # If branch is synced with upstream (track_status == "="), delete without confirmation
         # Otherwise, show confirmation dialog
@@ -798,7 +847,7 @@ class HopApp(App[None]):
             old_branch_list.remove()
 
             # Create and mount new branch list
-            new_branch_list = BranchList(new_branches)
+            new_branch_list = BranchList(new_branches, self._current_branch_name())
             self.mount(new_branch_list, before=1)  # Mount before Footer
 
             # Restore cursor position

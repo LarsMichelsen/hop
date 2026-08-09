@@ -21,6 +21,9 @@ top, so the one you want is almost always a keystroke away.
   and its upstream (e.g. `base main: +2 -5 | upstream origin/x: +1 -0`)
 - Quick actions: checkout, rebase, delete, or create branches
 - Shows upstream branch and merge status
+- Worktree aware: branches checked out in another worktree are marked `+`
+  (like `git branch`), checkout/delete of them is refused with a clear
+  message, and rebase runs inside the worktree that holds them
 - Vim-style navigation (arrow keys or j/k)
 
 ## Installation

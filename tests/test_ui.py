@@ -45,6 +45,7 @@ def _branch(
     behind: int | None = None,
     upstream_ahead: int | None = None,
     upstream_behind: int | None = None,
+    worktree_path: str | None = None,
 ) -> BranchInfo:
     return BranchInfo(
         name=name,
@@ -59,6 +60,7 @@ def _branch(
         behind=behind,
         upstream_ahead=upstream_ahead,
         upstream_behind=upstream_behind,
+        worktree_path=worktree_path,
     )
 
 
@@ -93,6 +95,15 @@ def test_format_branch_name_returns_plain_string_for_non_current_branches() -> N
     result = format_branch_name("feature", is_current=False)
 
     assert result == "feature"
+
+
+def test_format_branch_name_marks_branches_held_by_another_worktree_in_cyan() -> None:
+    result = format_branch_name("feature", is_current=False, in_other_worktree=True)
+
+    assert isinstance(result, Text)
+    assert result.plain == "+ feature"
+    assert "cyan" in str(result.style)
+    assert "bright_cyan" not in str(result.style)
 
 
 def test_format_details_renders_loading_marker_dimmed() -> None:
@@ -150,6 +161,21 @@ def test_format_details_dims_zero_counts() -> None:
     assert count_styles == ["dim"] * 5  # four zero counts plus the separator
 
 
+def test_format_details_appends_the_holding_worktree_path() -> None:
+    result = format_details(
+        _branch("x", base_branch="main", ahead=1, behind=0, worktree_path="/repos/wt"),
+        in_other_worktree=True,
+    )
+
+    assert result.plain == "base main: +1 -0 | no upstream | worktree /repos/wt"
+
+
+def test_format_details_omits_the_worktree_of_the_current_branch() -> None:
+    result = format_details(_branch("x", worktree_path="/repos/main"))
+
+    assert "worktree" not in result.plain
+
+
 def test_current_branch_highlight_avoids_bright_green_under_solarized() -> None:
     # Solarized remaps bright_green to a grey base tone, so the highlight must
     # use plain green to stay green across terminal themes.
@@ -186,14 +212,19 @@ def test_format_status_message_strips_trailing_whitespace() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_branch_list_falls_back_to_empty_current_branch_when_get_current_branch_raises(
+async def test_branch_list_has_no_current_branch_when_the_lookup_fails(
     sample_branches: list[BranchInfo],
 ) -> None:
-    with patch("hop.ui.get_current_branch", side_effect=RuntimeError("Not in a repo")):
-        branch_list = BranchList(sample_branches)
+    client = FakeGitClient(branches=sample_branches)
+    client.get_current_branch_error = RuntimeError("Not in a repo")
+    app = HopApp(sample_branches, client=client)
 
-    assert branch_list.branches == sample_branches
-    assert branch_list.current_branch == ""
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        branch_list = app.query_one(BranchList)
+        assert branch_list.branches == sample_branches
+        assert branch_list.current_branch == ""
 
 
 async def test_update_branch_replaces_branch_entry_in_internal_list(
@@ -407,7 +438,7 @@ async def test_pressing_r_rebases_selected_branch_and_updates_status(
         await pilot.press("r")
         await pilot.pause()
 
-        assert client.rebase_calls == ["feature"]
+        assert client.rebase_calls == [("feature", None)]
         status = app.query_one("#status", Static)
         assert "Rebased to branch: feature" in str(status.content)
 
@@ -563,6 +594,115 @@ async def test_pressing_d_on_empty_branch_list_is_a_noop() -> None:
 
         assert client.delete_calls == []
         assert not isinstance(app.screen, ConfirmDeleteScreen)
+
+
+# ---------------------------------------------------------------------------
+# Worktree awareness
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def worktree_branches() -> list[BranchInfo]:
+    # "feature" is held by another worktree; "main" is the current branch in
+    # this one. track_status "=" on feature would normally delete without a
+    # confirmation dialog, so the worktree guard must fire first.
+    return [
+        _branch("feature", worktree_path="/repos/wt-feature", track_status="="),
+        _branch("main", worktree_path="/repos/main"),
+    ]
+
+
+async def test_pressing_c_on_a_branch_held_by_another_worktree_refuses_with_its_path(
+    worktree_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=worktree_branches)
+    app = HopApp(worktree_branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+
+        assert client.checkout_calls == []
+        status = app.query_one("#status", Static)
+        assert "checked out in worktree /repos/wt-feature" in str(status.content)
+
+
+async def test_pressing_d_on_a_branch_held_by_another_worktree_refuses_and_keeps_it(
+    worktree_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=worktree_branches)
+    app = HopApp(worktree_branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("d")
+        await pilot.pause()
+
+        assert client.delete_calls == []
+        assert not isinstance(app.screen, ConfirmDeleteScreen)
+        assert [b.name for b in app.query_one(BranchList).branches] == ["feature", "main"]
+        status = app.query_one("#status", Static)
+        assert "Cannot delete 'feature'" in str(status.content)
+
+
+async def test_pressing_r_on_a_branch_held_by_another_worktree_rebases_it_there(
+    worktree_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=worktree_branches)
+    app = HopApp(worktree_branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("r")
+        await pilot.pause()
+
+        assert client.rebase_calls == [("feature", "/repos/wt-feature")]
+        status = app.query_one("#status", Static)
+        assert "Rebased branch feature in worktree /repos/wt-feature" in str(status.content)
+
+
+async def test_the_current_branch_is_not_blocked_by_its_own_worktree_path(
+    worktree_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=worktree_branches)
+    app = HopApp(worktree_branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")  # select "main", the current branch
+        await pilot.press("c")
+        await pilot.pause()
+
+        assert client.checkout_calls == ["main"]
+
+
+async def test_branch_list_marks_branches_held_by_another_worktree(
+    worktree_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=worktree_branches)
+    app = HopApp(worktree_branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        branch_list = app.query_one(BranchList)
+        rendered = branch_list.get_cell_at((0, 1))  # type: ignore[arg-type,misc]
+        assert isinstance(rendered, Text)
+        assert rendered.plain == "+ feature"
+
+
+async def test_details_line_names_the_worktree_holding_the_selected_branch(
+    worktree_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=worktree_branches)
+    app = HopApp(worktree_branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        details = app.query_one("#details", Static)
+        assert "worktree /repos/wt-feature" in str(details.content)
 
 
 @pytest.mark.parametrize(

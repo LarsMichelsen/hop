@@ -23,6 +23,10 @@ class BranchInfo:
     # Commit counts relative to the configured upstream; None without one.
     upstream_ahead: int | None = None
     upstream_behind: int | None = None
+    # Absolute path of the worktree the branch is checked out in (worktrees
+    # share the ref store, so this includes the current one); None when the
+    # branch is not checked out anywhere.
+    worktree_path: str | None = None
 
 
 _FORBIDDEN_BRANCH_CHARS = " \t~^:?*[\\"
@@ -76,7 +80,7 @@ class GitClient(Protocol):
     def fetch_branch_metadata(self, branch: BranchInfo) -> BranchInfo: ...
     def checkout_branch(self, branch_name: str) -> None: ...
     def get_base_branch(self, branch_name: str) -> str | None: ...
-    def rebase_to_branch(self, branch_name: str) -> None: ...
+    def rebase_to_branch(self, branch_name: str, worktree_path: str | None = None) -> None: ...
     def delete_branch(self, branch_name: str) -> None: ...
     def create_branch(self, source_branch: str, new_branch_name: str) -> None: ...
 
@@ -121,7 +125,8 @@ class SubprocessGitClient:
                 "for-each-ref",
                 "refs/heads/",
                 "--sort=-creatordate",
-                "--format=%(refname:short)%09%(creatordate:short)%09%(contents:subject)",
+                "--format=%(refname:short)%09%(creatordate:short)"
+                "%09%(worktreepath)%09%(contents:subject)",
             ],
             capture_output=True,
             text=True,
@@ -132,14 +137,17 @@ class SubprocessGitClient:
             raise RuntimeError(f"Failed to get branches: {result.stderr}")
 
         branches: list[BranchInfo] = []
-        for line in result.stdout.strip().split("\n"):
+        # splitlines, not strip().split("\n"): stripping the whole output
+        # would also eat trailing tabs of the last line, collapsing empty
+        # fields (e.g. an empty commit subject) and dropping that branch.
+        for line in result.stdout.splitlines():
             if not line:
                 continue
-            parts = line.split("\t", 2)
-            if len(parts) != 3:
+            parts = line.split("\t", 3)
+            if len(parts) != 4:
                 continue
 
-            name, date_str, message = parts
+            name, date_str, worktree_path, message = parts
             date = datetime.strptime(date_str, "%Y-%m-%d")
 
             branches.append(
@@ -148,6 +156,7 @@ class SubprocessGitClient:
                     creator_date=date,
                     last_commit_message=message,
                     is_loading=True,
+                    worktree_path=worktree_path or None,
                 )
             )
 
@@ -161,7 +170,7 @@ class SubprocessGitClient:
                 "git",
                 "for-each-ref",
                 f"refs/heads/{branch.name}",
-                "--format=%(upstream:short)%09%(upstream:trackshort)",
+                "--format=%(upstream:short)%09%(upstream:trackshort)%09%(worktreepath)",
             ],
             capture_output=True,
             text=True,
@@ -170,13 +179,19 @@ class SubprocessGitClient:
 
         upstream = None
         track_status = ""
+        worktree_path = None
 
-        if result.returncode == 0 and result.stdout.strip():
-            parts = result.stdout.strip().split("\t")
+        # rstrip("\n") only: .strip() would also eat the leading tabs of e.g.
+        # "\t\t/path" (no upstream, checked out in a worktree), shifting the
+        # path into the upstream field.
+        if result.returncode == 0:
+            parts = result.stdout.rstrip("\n").split("\t")
             if len(parts) >= 1:
                 upstream = parts[0] if parts[0] else None
             if len(parts) >= 2:
                 track_status = parts[1]
+            if len(parts) >= 3:
+                worktree_path = parts[2] if parts[2] else None
 
         is_merged = False
         upstream_ahead: int | None = None
@@ -210,6 +225,7 @@ class SubprocessGitClient:
             behind=behind,
             upstream_ahead=upstream_ahead,
             upstream_behind=upstream_behind,
+            worktree_path=worktree_path,
         )
 
     def _count_ahead_behind(
@@ -333,8 +349,14 @@ class SubprocessGitClient:
 
         return best_base
 
-    def rebase_to_branch(self, branch_name: str) -> None:
-        """Check out branch_name and rebase it onto its detected base branch."""
+    def rebase_to_branch(self, branch_name: str, worktree_path: str | None = None) -> None:
+        """Rebase branch_name onto its detected base branch.
+
+        Without worktree_path the branch is checked out in the current
+        worktree first. With worktree_path (the worktree holding the branch)
+        the rebase runs inside that worktree via ``git -C``, leaving the
+        current worktree untouched.
+        """
         base_branch = self.get_base_branch(branch_name)
 
         if base_branch is None:
@@ -343,18 +365,29 @@ class SubprocessGitClient:
                 "Please set an upstream branch or ensure the branch was created from main/master."
             )
 
-        result = subprocess.run(
-            ["git", "checkout", branch_name],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        if worktree_path is None:
+            result = subprocess.run(
+                ["git", "checkout", branch_name],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
 
-        if result.returncode != 0:
-            raise RuntimeError(f"Failed to checkout branch: {result.stderr}")
+            if result.returncode != 0:
+                raise RuntimeError(f"Failed to checkout branch: {result.stderr}")
+
+            rebase_cmd = ["git", "rebase", base_branch]
+            abort_cmd = ["git", "rebase", "--abort"]
+        else:
+            # Name the branch explicitly instead of rebasing that worktree's
+            # HEAD: if the branch moved elsewhere since the listing was taken,
+            # git fails the implicit checkout instead of silently rebasing
+            # whatever the worktree happens to have checked out.
+            rebase_cmd = ["git", "-C", worktree_path, "rebase", base_branch, branch_name]
+            abort_cmd = ["git", "-C", worktree_path, "rebase", "--abort"]
 
         result = subprocess.run(
-            ["git", "rebase", base_branch],
+            rebase_cmd,
             capture_output=True,
             text=True,
             check=False,
@@ -366,7 +399,7 @@ class SubprocessGitClient:
             # abort to restore the pre-rebase state rather than stranding the
             # user mid-rebase with no way out from within the app.
             subprocess.run(
-                ["git", "rebase", "--abort"],
+                abort_cmd,
                 capture_output=True,
                 check=False,
             )
@@ -443,8 +476,8 @@ def get_base_branch(branch_name: str) -> str | None:
     return _default_client.get_base_branch(branch_name)
 
 
-def rebase_to_branch(branch_name: str) -> None:
-    _default_client.rebase_to_branch(branch_name)
+def rebase_to_branch(branch_name: str, worktree_path: str | None = None) -> None:
+    _default_client.rebase_to_branch(branch_name, worktree_path)
 
 
 def delete_branch(branch_name: str) -> None:
