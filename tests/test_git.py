@@ -108,6 +108,17 @@ def test_get_branches_fast_returns_empty_list_when_git_output_is_empty() -> None
         assert branches == []
 
 
+def test_get_branches_fast_skips_refs_without_a_parseable_creator_date() -> None:
+    mock_result = Mock()
+    mock_result.returncode = 0
+    mock_result.stdout = "main\t2025-01-01\t\tInitial commit\nodd-ref\t\t\tno date\n"
+
+    with patch("subprocess.run", return_value=mock_result):
+        branches = SubprocessGitClient().get_branches_fast()
+
+    assert [b.name for b in branches] == ["main"]
+
+
 def test_get_branches_fast_skips_lines_that_lack_four_tab_separated_parts() -> None:
     mock_result = Mock()
     mock_result.returncode = 0

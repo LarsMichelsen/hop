@@ -148,7 +148,13 @@ class SubprocessGitClient:
                 continue
 
             name, date_str, worktree_path, message = parts
-            date = datetime.strptime(date_str, "%Y-%m-%d")
+            try:
+                date = datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                # A ref without a creatordate (e.g. pointing at a non-commit
+                # object) leaves the field empty; skip it rather than crash
+                # the whole listing.
+                continue
 
             branches.append(
                 BranchInfo(
