@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "hop"
+name = "git-hop"
 version = "0.1.0"
 description = "Helper for quick git branch hopping."
 readme = "README.md"
@@ -20,6 +20,10 @@ Repository = "https://github.com/LarsMichelsen/hop"
 
 [project.scripts]
 hop = "hop.main:main"
+git-hop = "hop.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hop"]
 
 [tool.uv]
 package = true

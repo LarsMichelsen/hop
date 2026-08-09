@@ -32,22 +32,36 @@ top, so the one you want is almost always a keystroke away.
 Requires Python 3.12 or newer. Installation via `uv` recommended (isolated, added to PATH):
 
 ```bash
+uv tool install git-hop
+```
+
+Or install the latest development state straight from the repository:
+
+```bash
 uv tool install git+https://github.com/LarsMichelsen/hop.git
 ```
 
 ## Updating
 
 ```bash
-uv tool upgrade hop
+uv tool upgrade git-hop
 ```
 
 ## Usage
 
+The package installs the command as both `hop` and a `git hop` subcommand:
+
 ```bash
 hop            # launch the interactive branch browser
+git hop        # the same, as a git subcommand
 hop --help     # show usage and exit
 hop --version  # print the version and exit
 ```
+
+Note: the worktree-jumping shell wrapper below wraps `hop`; `git hop` runs
+without it (everything works, jumping to another worktree just tells you the
+path instead of changing into it). And as with any external git subcommand,
+`git hop --help` asks git for a man page — use `hop --help` instead.
 
 ### Controls
 

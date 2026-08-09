@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # Create the GitHub Release.
+      contents: write
+      # Mint the OIDC token for PyPI trusted publishing (no API token needed;
+      # the publisher is configured on pypi.org for this repo + workflow).
+      id-token: write
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      # The tag may have been pushed without waiting for CI on the commit;
+      # never publish an artifact that does not pass the full check suite.
+      - name: Run all checks
+        run: uv run prek run --all-files --show-diff-on-failure
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" dist/*
+          --verify-tag --generate-notes

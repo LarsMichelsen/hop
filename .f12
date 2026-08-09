@@ -6,6 +6,10 @@ set -euo pipefail
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# The distribution was renamed hop -> git-hop; drop a stale install under the
+# old name so its `hop` executable cannot shadow the new tool's.
+uv tool uninstall hop >/dev/null 2>&1 || true
+
 # --editable: the installed tool tracks this working tree.
 # --force:    redeploy over any existing install when this script is re-run.
 uv tool install --force --editable .
