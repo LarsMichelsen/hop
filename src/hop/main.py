@@ -1,6 +1,7 @@
 """Main entry point for hop."""
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -89,6 +90,10 @@ def main(argv: list[str] | None = None, client: GitClient | None = None) -> None
             branches, client, config=config, jump_enabled=args.cd_file is not None
         )
     except Exception as e:
+        # The terse one-liner keeps normal use clean, but erases the traceback
+        # a bug report needs; HOP_DEBUG=1 lets it propagate instead.
+        if os.environ.get("HOP_DEBUG"):
+            raise
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 

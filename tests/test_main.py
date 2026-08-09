@@ -54,7 +54,10 @@ def test_main_exits_when_branch_listing_raises_runtime_error(
 
 def test_main_exits_when_interactive_ui_raises(
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("HOP_DEBUG", raising=False)
+
     with (
         patch("hop.main.run_interactive_ui", side_effect=Exception("UI error")),
         pytest.raises(SystemExit) as exc_info,
@@ -63,6 +66,18 @@ def test_main_exits_when_interactive_ui_raises(
 
     assert exc_info.value.code == 1
     assert "UI error" in capsys.readouterr().err
+
+
+def test_main_reraises_ui_errors_with_traceback_when_hop_debug_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOP_DEBUG", "1")
+
+    with (
+        patch("hop.main.run_interactive_ui", side_effect=Exception("UI error")),
+        pytest.raises(Exception, match="UI error"),
+    ):
+        main([], client=_client_with_a_branch())
 
 
 def test_main_writes_the_jump_target_to_the_cd_file(tmp_path: Path) -> None:

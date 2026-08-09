@@ -64,6 +64,9 @@ without it (everything works, jumping to another worktree just tells you the
 path instead of changing into it). And as with any external git subcommand,
 `git hop --help` asks git for a man page — use `hop --help` instead.
 
+Unexpected errors are reported as a one-line message. Run with `HOP_DEBUG=1`
+to get the full traceback instead — please include it in bug reports.
+
 ### Controls
 
 - `↑`/`↓` or `j`/`k` - Navigate branches
