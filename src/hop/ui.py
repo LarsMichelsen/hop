@@ -484,8 +484,12 @@ class HopApp(App[str | None]):
        $panel/$foreground cursor is indistinguishable from a normal row. The
        $block-cursor-* variables are the one pair each theme guarantees to
        contrast — ansi_blue on ansi_default here, an auto-contrasting fg on the
-       accent elsewhere. */
-    DataTable:focus > .datatable--cursor {
+       accent elsewhere.
+
+       Deliberately not scoped to :focus (app CSS outranks the widget's
+       built-in blurred-cursor rule): the selection must stay fully visible
+       while the filter input holds focus and under the delete dialog. */
+    DataTable > .datatable--cursor {
         background: $block-cursor-background;
         color: $block-cursor-foreground;
         text-style: $block-cursor-text-style;
