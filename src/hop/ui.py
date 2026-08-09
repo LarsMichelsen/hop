@@ -69,7 +69,8 @@ Navigation:
   ↓/j        Move cursor down
 
 Actions:
-  c          Checkout selected branch
+  c          Checkout selected branch (jump to its
+             worktree when held by another one)
   r          Rebase selected branch onto its base
   d          Delete selected branch (with confirmation)
   n          Create new branch from selected branch
@@ -475,8 +476,12 @@ class BranchList(DataTable):  # type: ignore[misc]
         event.stop()
 
 
-class HopApp(App[None]):
-    """Interactive git branch manager."""
+class HopApp(App[str | None]):
+    """Interactive git branch manager.
+
+    Exits with the worktree path to jump to when the user picks a branch
+    held by another worktree (and jumping is enabled), None otherwise.
+    """
 
     CSS = """
     BranchList {
@@ -548,11 +553,16 @@ class HopApp(App[None]):
         branches: list[BranchInfo],
         client: GitClient | None = None,
         config: Config | None = None,
+        jump_enabled: bool = False,
     ) -> None:
         super().__init__()
         self.branches = branches
         self.client: GitClient = client if client is not None else SubprocessGitClient()
         self.config: Config = config if config is not None else load_config()
+        # A child process cannot change the parent shell's directory, so
+        # jumping only works when the shell wrapper passed --cd-file and
+        # will cd to whatever path the app exits with.
+        self.jump_enabled = jump_enabled
         self.metadata_workers: list[Worker[BranchInfo]] = []
 
     def _current_branch_name(self) -> str:
@@ -665,7 +675,13 @@ class HopApp(App[None]):
 
         branch = self.branches[cursor_row]
         if (worktree := self._other_worktree_path(branch)) is not None:
-            self.show_error(f"Branch '{branch.name}' is checked out in worktree {worktree}")
+            if self.jump_enabled:
+                self.exit(worktree)
+            else:
+                self.show_error(
+                    f"Branch '{branch.name}' is checked out in worktree {worktree} "
+                    "(shell wrapper needed to jump there, see README)"
+                )
             return
 
         try:
@@ -896,7 +912,14 @@ class HopApp(App[None]):
         self.query_one("#status", Static).update(content)
 
 
-def run_interactive_ui(branches: list[BranchInfo], client: GitClient | None = None) -> None:
-    """Run the interactive terminal UI for branch selection."""
-    app = HopApp(branches, client)
-    app.run()
+def run_interactive_ui(
+    branches: list[BranchInfo],
+    client: GitClient | None = None,
+    jump_enabled: bool = False,
+) -> str | None:
+    """Run the interactive terminal UI for branch selection.
+
+    Returns the worktree path to jump to, or None when the user just quit.
+    """
+    app = HopApp(branches, client, jump_enabled=jump_enabled)
+    return app.run()

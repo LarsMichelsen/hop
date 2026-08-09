@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+from pathlib import Path
 
 from hop import __version__
 from hop.config import install_example_config
@@ -15,6 +16,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         description="Helper for quick git branch hopping.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument(
+        "--cd-file",
+        metavar="FILE",
+        help=(
+            "write the directory to change into to FILE on exit; set by the "
+            "shell wrapper (see README) to enable jumping to a branch's worktree"
+        ),
+    )
 
     # --force only makes sense for init-config, so it lives on the subcommand
     # rather than at the top level (where `hop --force` was silently ignored).
@@ -67,10 +76,17 @@ def main(argv: list[str] | None = None, client: GitClient | None = None) -> None
         sys.exit(1)
 
     try:
-        run_interactive_ui(branches, client)
+        jump_target = run_interactive_ui(branches, client, jump_enabled=args.cd_file is not None)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+    if args.cd_file and jump_target:
+        try:
+            Path(args.cd_file).write_text(jump_target)
+        except OSError as e:
+            print(f"Error: Could not write --cd-file: {e}", file=sys.stderr)
+            sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -662,6 +662,37 @@ async def test_pressing_r_on_a_branch_held_by_another_worktree_rebases_it_there(
         assert "Rebased branch feature in worktree /repos/wt-feature" in str(status.content)
 
 
+async def test_pressing_c_with_jumping_enabled_exits_with_the_holding_worktree(
+    worktree_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=worktree_branches)
+    app = HopApp(worktree_branches, client=client, jump_enabled=True)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+
+    assert app.return_value == "/repos/wt-feature"
+    assert client.checkout_calls == []
+
+
+async def test_jumping_enabled_still_checks_out_branches_not_held_by_a_worktree(
+    sample_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=sample_branches)
+    app = HopApp(sample_branches, client=client, jump_enabled=True)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")  # select "feature"
+        await pilot.press("c")
+        await pilot.pause()
+
+        assert client.checkout_calls == ["feature"]
+        assert app.is_running
+
+
 async def test_the_current_branch_is_not_blocked_by_its_own_worktree_path(
     worktree_branches: list[BranchInfo],
 ) -> None:
@@ -1322,5 +1353,5 @@ def test_run_interactive_ui_constructs_HopApp_with_branches_and_client_and_runs_
 
         run_interactive_ui(sample_branches, client)
 
-        mock_app_class.assert_called_once_with(sample_branches, client)
+        mock_app_class.assert_called_once_with(sample_branches, client, jump_enabled=False)
         mock_app_instance.run.assert_called_once()

@@ -51,12 +51,49 @@ hop --version  # print the version and exit
 ### Controls
 
 - `↑`/`↓` or `j`/`k` - Navigate branches
-- `c` - Checkout selected branch
+- `c` - Checkout selected branch (or jump to its worktree, see below)
 - `r` - Rebase selected branch onto its base
 - `n` - Create new branch from selected branch
 - `d` - Delete selected branch
 - `h` - Show help screen
 - `q` - Quit
+
+### Shell integration: jump between worktrees
+
+Branches checked out in another worktree are marked `+`. Pressing `c` on one
+jumps to that worktree — but `hop` runs as a child process and cannot change
+your shell's working directory by itself. Add this wrapper to your
+`~/.bashrc` / `~/.zshrc`:
+
+```bash
+hop() {
+    local tmp target
+    tmp="$(mktemp)"
+    command hop --cd-file "$tmp" "$@"
+    target="$(cat "$tmp")"
+    rm -f "$tmp"
+    if [ -n "$target" ] && [ "$target" != "$PWD" ]; then
+        cd "$target" || return
+    fi
+}
+```
+
+Or for fish (`~/.config/fish/config.fish`):
+
+```fish
+function hop
+    set -l tmp (mktemp)
+    command hop --cd-file $tmp $argv
+    set -l target (cat $tmp)
+    rm -f $tmp
+    if test -n "$target" -a "$target" != "$PWD"
+        cd $target
+    end
+end
+```
+
+Without the wrapper everything else still works; pressing `c` on a `+` branch
+then shows where the branch lives instead of jumping.
 
 ## Configuration
 
