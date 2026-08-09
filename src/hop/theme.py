@@ -63,9 +63,32 @@ def resolve_theme(setting: str, env: Mapping[str, str]) -> str:
     return DEFAULT_THEME
 
 
-def toggle_dark_light(current: str) -> str:
-    """Flip between dark and light variants of the Textual default theme."""
-    return "textual-light" if current == "textual-dark" else "textual-dark"
+# Themes that ship with a direct dark/light counterpart (both sides always
+# registered together, so toggling can never land on a missing theme).
+_DARK_LIGHT_PAIRS: dict[str, str] = {
+    "textual-dark": "textual-light",
+    "textual-light": "textual-dark",
+    "ansi-dark": "ansi-light",
+    "ansi-light": "ansi-dark",
+    "catppuccin-mocha": "catppuccin-latte",
+    "catppuccin-latte": "catppuccin-mocha",
+}
+
+
+def next_theme(current: str, home: str) -> str:
+    """Theme the toggle key switches to next.
+
+    ``home`` is the theme the app started on. When it has a dark/light
+    counterpart, toggle within that pair. Otherwise cycle
+    home -> textual-dark -> textual-light -> home, so the startup theme is
+    always reachable again instead of being lost on the first toggle.
+    """
+    if home in _DARK_LIGHT_PAIRS:
+        return _DARK_LIGHT_PAIRS[home] if current == home else home
+    cycle = (home, "textual-dark", "textual-light")
+    if current in cycle:
+        return cycle[(cycle.index(current) + 1) % len(cycle)]
+    return home
 
 
 def pick_terminal_fallback(available: frozenset[str]) -> str:

@@ -18,7 +18,7 @@ from hop.git import (
     SubprocessGitClient,
     validate_branch_name,
 )
-from hop.theme import pick_terminal_fallback, resolve_theme, toggle_dark_light
+from hop.theme import next_theme, pick_terminal_fallback, resolve_theme
 
 
 class HelpScreen(ModalScreen[None]):  # type: ignore[misc]
@@ -74,7 +74,8 @@ Actions:
   r          Rebase selected branch onto its base
   d          Delete selected branch (with confirmation)
   n          Create new branch from selected branch
-  t          Toggle light/dark theme
+  t          Cycle theme (dark/light, then back
+             to the startup theme)
   h          Show this help screen
   q          Quit application
 
@@ -564,6 +565,9 @@ class HopApp(App[str | None]):
         # will cd to whatever path the app exits with.
         self.jump_enabled = jump_enabled
         self.metadata_workers: list[Worker[BranchInfo]] = []
+        # Startup theme, fixed at mount time; the theme toggle cycles back to
+        # it so a configured theme is never lost for the rest of the session.
+        self._home_theme: str = "textual-dark"
 
     def _current_branch_name(self) -> str:
         try:
@@ -603,6 +607,7 @@ class HopApp(App[str | None]):
         # adapting theme that is — preserving the "auto" intent.
         if resolved not in self.available_themes:
             resolved = pick_terminal_fallback(frozenset(self.available_themes))
+        self._home_theme = resolved
         self.theme = resolved
         self.load_metadata()
         # The initial cursor placement does not emit RowHighlighted, so seed
@@ -610,8 +615,7 @@ class HopApp(App[str | None]):
         self._update_details(self.query_one(BranchList).cursor_row)
 
     def action_toggle_theme(self) -> None:
-        """Toggle between Textual's dark and light themes."""
-        self.theme = toggle_dark_light(self.theme)
+        self.theme = next_theme(self.theme, self._home_theme)
         self.show_status(f"Theme: {self.theme}")
 
     @work(exclusive=False, thread=True)

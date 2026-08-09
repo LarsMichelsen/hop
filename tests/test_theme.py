@@ -2,7 +2,7 @@
 
 import pytest
 
-from hop.theme import DEFAULT_THEME, pick_terminal_fallback, resolve_theme, toggle_dark_light
+from hop.theme import DEFAULT_THEME, next_theme, pick_terminal_fallback, resolve_theme
 
 
 @pytest.mark.parametrize(
@@ -44,13 +44,31 @@ def test_resolve_theme_auto_falls_back_when_hop_theme_env_unknown() -> None:
     assert resolve_theme("auto", env={"HOP_THEME": "bogus"}) == DEFAULT_THEME
 
 
-def test_toggle_dark_light_flips_dark_to_light() -> None:
-    assert toggle_dark_light("textual-dark") == "textual-light"
+def test_next_theme_toggles_within_the_default_dark_light_pair() -> None:
+    assert next_theme("textual-dark", home="textual-dark") == "textual-light"
+    assert next_theme("textual-light", home="textual-dark") == "textual-dark"
 
 
-def test_toggle_dark_light_flips_anything_else_back_to_dark() -> None:
-    assert toggle_dark_light("textual-light") == "textual-dark"
-    assert toggle_dark_light("nord") == "textual-dark"
+@pytest.mark.parametrize(
+    "home,counterpart",
+    [
+        pytest.param("ansi-dark", "ansi-light", id="ansi"),
+        pytest.param("catppuccin-mocha", "catppuccin-latte", id="catppuccin"),
+    ],
+)
+def test_next_theme_toggles_a_paired_home_theme_both_ways(home: str, counterpart: str) -> None:
+    assert next_theme(home, home=home) == counterpart
+    assert next_theme(counterpart, home=home) == home
+
+
+def test_next_theme_cycles_an_unpaired_home_theme_back_to_itself() -> None:
+    assert next_theme("nord", home="nord") == "textual-dark"
+    assert next_theme("textual-dark", home="nord") == "textual-light"
+    assert next_theme("textual-light", home="nord") == "nord"
+
+
+def test_next_theme_recovers_home_when_current_is_outside_the_cycle() -> None:
+    assert next_theme("dracula", home="nord") == "nord"
 
 
 def test_pick_terminal_fallback_prefers_ansi_dark_when_available() -> None:

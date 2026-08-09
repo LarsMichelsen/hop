@@ -1340,6 +1340,24 @@ async def test_pressing_t_toggles_between_dark_and_light(
         assert app.theme == "textual-dark"
 
 
+async def test_pressing_t_cycles_back_to_the_configured_startup_theme(
+    sample_branches: list[BranchInfo],
+) -> None:
+    # A theme without a dark/light counterpart must stay reachable: the cycle
+    # returns to it instead of stranding the user on the textual defaults.
+    config = Config(branch_prefixes={}, default_branch_prefix="", theme="nord")
+    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches), config=config)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.theme == "nord"
+
+        for expected in ("textual-dark", "textual-light", "nord"):
+            await pilot.press("t")
+            await pilot.pause()
+            assert app.theme == expected
+
+
 async def test_toggle_theme_action_reports_new_theme_in_status(
     sample_branches: list[BranchInfo],
 ) -> None:

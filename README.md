@@ -55,6 +55,7 @@ hop --version  # print the version and exit
 - `r` - Rebase selected branch onto its base
 - `n` - Create new branch from selected branch
 - `d` - Delete selected branch
+- `t` - Cycle theme (dark/light, then back to the startup theme)
 - `h` - Show help screen
 - `q` - Quit
 
@@ -129,7 +130,7 @@ develop = "feat/"
 
 | Setting | Purpose |
 | --- | --- |
-| `[ui] theme` | Color theme; `"auto"` adapts to the terminal. Toggle light/dark at runtime with `t`. |
+| `[ui] theme` | Color theme; `"auto"` adapts to the terminal. Cycle themes at runtime with `t` (always returns to the configured theme). |
 | `[defaults] branch_prefix` | Default prefix for new branch names. |
 | `[branch_prefixes]` | Prefix overrides keyed by the source branch you create from. |
 
