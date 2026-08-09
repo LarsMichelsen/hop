@@ -28,6 +28,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          # hatch-vcs needs `git describe` to work when uv builds the
+          # editable install; a shallow, tagless checkout would break it.
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7

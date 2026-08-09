@@ -141,6 +141,53 @@ Tool configurations live in `pyproject.toml`:
 
 The pre-commit hook list lives in `prek.toml`.
 
-## CI/CD
+## CI
 
-These same checks will run automatically in CI/CD pipelines to ensure code quality.
+`.github/workflows/ci.yml` runs the same four prek checks on every push to
+`main` and every pull request, across all supported Python versions.
+
+## Releasing
+
+### Versioning
+
+The version has a single source of truth: **git tags**. `hatch-vcs` derives
+the package version from `git describe` at build time, so there is no version
+field to bump anywhere — tagging *is* the version bump.
+
+- Release tags are `v<MAJOR>.<MINOR>.<PATCH>` (SemVer), e.g. `v0.2.0`.
+- The "public API" for versioning purposes is what users depend on: command
+  names and flags, config file keys, keybindings, and the `--cd-file` shell
+  wrapper contract. Breaking any of those bumps MAJOR (MINOR while on 0.x);
+  new features bump MINOR; fixes bump PATCH.
+- Untagged builds get a dev version derived from the last tag, e.g.
+  `0.1.1.dev3+g4aabd79` = 3 commits after v0.1.0, at commit 4aabd79. This is
+  what `hop --version` reports for installs from a git checkout, making bug
+  reports unambiguous.
+
+### Procedure
+
+1. Make sure `main` holds everything the release should contain, is pushed,
+   and CI is green.
+2. Tag the release commit — tagging comes last; never amend or rebase a
+   commit that already carries a tag:
+   ```bash
+   git tag -a v0.2.0 -m "hop 0.2.0"
+   ```
+3. Push the tag:
+   ```bash
+   git push origin v0.2.0
+   ```
+4. The tag push triggers `.github/workflows/release.yml`, which re-runs all
+   checks, builds the sdist and wheel, verifies the artifacts carry the
+   tag's version, publishes to PyPI via trusted publishing, and creates the
+   GitHub Release with generated notes.
+5. Verify the workflow run under Actions, then spot-check with
+   `uv tool install git-hop`.
+
+### Rules
+
+- **Published versions are immutable.** PyPI rejects re-uploads of an
+  existing version, and a pushed tag must never be moved. A broken release
+  is fixed by a new PATCH release, not by re-tagging.
+- Pre-releases use PEP 440 tags such as `v0.2.0rc1`; installers ignore them
+  unless a pre-release is requested explicitly.

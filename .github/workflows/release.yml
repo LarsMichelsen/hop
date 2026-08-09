@@ -18,6 +18,11 @@ jobs:
       UV_PYTHON: "3.12"
     steps:
       - uses: actions/checkout@v7
+        with:
+          # hatch-vcs derives the version from `git describe`; a shallow,
+          # tagless checkout would break it.
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -34,6 +39,12 @@ jobs:
 
       - name: Build sdist and wheel
         run: uv build
+
+      # The version is derived from the tag; if the artifacts carry anything
+      # else (e.g. a .dev version), something about the tag or checkout is
+      # wrong — refuse to publish it.
+      - name: Verify the tag produced the release version
+        run: test -f "dist/git_hop-${GITHUB_REF_NAME#v}-py3-none-any.whl"
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "git-hop"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Helper for quick git branch hopping."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -22,11 +22,17 @@ Repository = "https://github.com/LarsMichelsen/hop"
 hop = "hop.main:main"
 git-hop = "hop.main:main"
 
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/hop"]
 
 [tool.uv]
 package = true
+# Re-stamp the tag-derived version whenever the git state changes.
+cache-keys = [{ git = { commit = true, tags = true } }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
