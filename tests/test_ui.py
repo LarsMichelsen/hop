@@ -596,6 +596,56 @@ async def test_pressing_d_on_empty_branch_list_is_a_noop() -> None:
         assert not isinstance(app.screen, ConfirmDeleteScreen)
 
 
+async def test_confirming_delete_is_refused_when_another_branch_took_the_row() -> None:
+    # The row index is captured when the dialog opens; if the list mutates
+    # while it is up, confirming must not delete whichever branch now sits
+    # at that index.
+    branches = [
+        _branch("main"),
+        _branch("feature", upstream="origin/feature", track_status=">"),
+        _branch("extra"),
+    ]
+    client = FakeGitClient(branches=branches)
+    app = HopApp(branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        branch_list = app.query_one(BranchList)
+        await pilot.press("j")
+        await pilot.press("d")  # confirmation dialog for "feature" (row 1)
+        await pilot.pause()
+        branch_list.remove_branch(1)  # "feature" vanishes; "extra" is row 1 now
+        await pilot.click("#confirm")
+        await pilot.pause()
+
+        assert client.delete_calls == []
+        status = app.query_one("#status", Static)
+        assert "Branch list changed" in str(status.content)
+
+
+async def test_confirming_delete_is_refused_when_the_row_no_longer_exists() -> None:
+    branches = [
+        _branch("main"),
+        _branch("feature", upstream="origin/feature", track_status=">"),
+    ]
+    client = FakeGitClient(branches=branches)
+    app = HopApp(branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        branch_list = app.query_one(BranchList)
+        await pilot.press("j")
+        await pilot.press("d")  # confirmation dialog for "feature" (row 1)
+        await pilot.pause()
+        branch_list.remove_branch(1)  # list shrinks below the captured index
+        await pilot.click("#confirm")
+        await pilot.pause()
+
+        assert client.delete_calls == []
+        status = app.query_one("#status", Static)
+        assert "Branch index out of range" in str(status.content)
+
+
 # ---------------------------------------------------------------------------
 # Worktree awareness
 # ---------------------------------------------------------------------------
