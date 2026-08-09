@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 from rich.cells import cell_len
 from rich.text import Text
-from textual.widgets import Button, Label, Static
+from textual.widgets import Button, Input, Label, Static
 
 from hop.config import Config
 from hop.git import BranchInfo
@@ -1425,3 +1425,162 @@ def test_run_interactive_ui_constructs_HopApp_with_branches_and_client_and_runs_
             sample_branches, client, config=None, jump_enabled=False
         )
         mock_app_instance.run.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Type-to-filter (/) and Enter-to-checkout
+# ---------------------------------------------------------------------------
+
+
+def _filter_branches() -> list[BranchInfo]:
+    return [
+        _branch("main"),
+        _branch("feature/login"),
+        _branch("feature/search"),
+        _branch("bugfix/crash"),
+    ]
+
+
+async def test_pressing_slash_opens_the_filter_and_typing_narrows_the_list() -> None:
+    branches = _filter_branches()
+    client = FakeGitClient(branches=branches)
+    app = HopApp(branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("slash")
+        for char in "fea":
+            await pilot.press(char)
+        await pilot.pause()
+
+        assert app.query_one("#filter-input", Input).display is True
+        visible = [b.name for b in app.query_one(BranchList).branches]
+        assert visible == ["feature/login", "feature/search"]
+
+
+async def test_filter_matches_case_insensitively() -> None:
+    branches = _filter_branches()
+    client = FakeGitClient(branches=branches)
+    app = HopApp(branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("slash")
+        for char in "BUG":
+            await pilot.press(char)
+        await pilot.pause()
+
+        assert [b.name for b in app.query_one(BranchList).branches] == ["bugfix/crash"]
+
+
+async def test_enter_in_the_filter_checks_out_the_highlighted_branch() -> None:
+    branches = _filter_branches()
+    client = FakeGitClient(branches=branches)
+    app = HopApp(branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("slash")
+        for char in "bug":
+            await pilot.press(char)
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert client.checkout_calls == ["bugfix/crash"]
+        assert app.query_one("#filter-input", Input).display is False
+
+
+async def test_arrow_keys_pick_within_the_filtered_list() -> None:
+    branches = _filter_branches()
+    client = FakeGitClient(branches=branches)
+    app = HopApp(branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("slash")
+        for char in "fea":
+            await pilot.press(char)
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert client.checkout_calls == ["feature/search"]
+
+
+async def test_escape_cancels_the_filter_and_keeps_the_highlighted_branch_selected() -> None:
+    branches = _filter_branches()
+    client = FakeGitClient(branches=branches)
+    app = HopApp(branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("slash")
+        for char in "bug":
+            await pilot.press(char)
+        await pilot.press("escape")
+        await pilot.pause()
+
+        branch_list = app.query_one(BranchList)
+        assert [b.name for b in branch_list.branches] == [b.name for b in branches]
+        assert branch_list.branches[branch_list.cursor_row].name == "bugfix/crash"
+        assert app.focused is branch_list
+        assert app.query_one("#filter-input", Input).display is False
+        assert client.checkout_calls == []
+
+
+async def test_enter_in_a_filter_without_matches_checks_nothing_out() -> None:
+    branches = _filter_branches()
+    client = FakeGitClient(branches=branches)
+    app = HopApp(branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("slash")
+        for char in "zzz":
+            await pilot.press(char)
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert client.checkout_calls == []
+        # The full list comes back so the user is not stuck on an empty view.
+        assert len(app.query_one(BranchList).branches) == len(branches)
+
+
+async def test_pressing_enter_on_the_list_checks_out_the_selected_branch(
+    sample_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=sample_branches)
+    app = HopApp(sample_branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert client.checkout_calls == ["feature"]
+
+
+async def test_metadata_arriving_for_a_filtered_out_branch_lands_in_the_full_list() -> None:
+    branches = [
+        _branch("main", is_loading=True),
+        _branch("feature", is_loading=True),
+    ]
+    client = _GatedMetadataClient(branches)
+    app = HopApp(list(branches), client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()  # workers start and block in fetch_branch_metadata
+        await pilot.press("slash")
+        for char in "main":
+            await pilot.press(char)
+        await pilot.pause()
+
+        client.release_metadata()  # "feature" is hidden while its result lands
+        await _drain_workers(app, pilot)
+        await pilot.press("escape")
+        await pilot.pause()
+
+        rows = app.query_one(BranchList).branches
+        assert [b.name for b in rows] == ["main", "feature"]
+        assert all(not b.is_loading for b in rows)

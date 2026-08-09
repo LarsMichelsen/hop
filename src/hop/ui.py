@@ -1,7 +1,7 @@
 """Text-based UI for hop."""
 
 import os
-from typing import ClassVar
+from typing import ClassVar, cast
 
 from rich.text import Text
 from textual import events, work
@@ -66,8 +66,10 @@ Navigation:
   ↓/j        Move cursor down
 
 Actions:
-  c          Checkout selected branch (jump to its
+  c / Enter  Checkout selected branch (jump to its
              worktree when held by another one)
+  /          Filter branches: type to narrow, arrows
+             to pick, Enter to checkout, Esc to cancel
   r          Rebase selected branch onto its base
   d          Delete selected branch (with confirmation)
   n          Create new branch from selected branch
@@ -374,9 +376,16 @@ def format_status_message(message: str, prefix: str = "", prefix_style: str = ""
 
 
 class BranchList(DataTable):  # type: ignore[misc]
+    """Table of branches; ``branches`` holds the visible rows.
+
+    Keeps its own copy of the list: with the filter active the visible rows
+    are a subset of the app's full list, so row indices only ever refer to
+    what is on screen.
+    """
+
     def __init__(self, branches: list[BranchInfo], current_branch: str = "") -> None:
         super().__init__()
-        self.branches = branches
+        self.branches = list(branches)
         self.current_branch = current_branch
 
     def on_mount(self) -> None:
@@ -427,6 +436,13 @@ class BranchList(DataTable):  # type: ignore[misc]
         self.update_cell_at((row_index, 0), date_str)  # type: ignore[arg-type,misc]
         self.update_cell_at((row_index, 1), branch_name)  # type: ignore[arg-type,misc]
         self.update_cell_at((row_index, 2), branch.last_commit_message)  # type: ignore[arg-type,misc]
+
+    def set_branches(self, branches: list[BranchInfo]) -> None:
+        """Replace the visible rows (used by the type-to-filter)."""
+        self.branches = list(branches)
+        self.clear()
+        for branch in branches:
+            self._add_branch_row(branch)
 
     def remove_branch(self, row_index: int) -> None:
         if row_index < 0 or row_index >= len(self.branches):
@@ -484,6 +500,16 @@ class HopApp(App[str | None]):
         background: $boost;
     }
 
+    /* Hidden until `/` opens it; borderless so it occupies a single row like
+       the other footer lines. */
+    #filter-input {
+        display: none;
+        height: 1;
+        border: none;
+        padding: 0 1;
+        background: $boost;
+    }
+
     /* Details about the selected branch (distance to its base branch). */
     #details {
         width: 100%;
@@ -514,11 +540,18 @@ class HopApp(App[str | None]):
         ("d", "delete", "Delete"),
         ("n", "new_branch", "New Branch"),
         ("t", "toggle_theme", "Toggle Theme"),
+        ("slash", "open_filter", "Filter"),
+        ("escape", "close_filter", "Close Filter"),
         ("h", "help", "Help"),
         ("q", "quit", "Quit"),
         ("ctrl+c", "quit", "Quit"),
         ("j", "cursor_down", "Down"),
         ("k", "cursor_up", "Up"),
+        # Arrow keys normally never reach the app (the focused table consumes
+        # them); these fire while the filter input holds focus, keeping list
+        # navigation available mid-filter.
+        ("up", "cursor_up", "Up"),
+        ("down", "cursor_down", "Down"),
     ]
 
     def __init__(
@@ -560,10 +593,14 @@ class HopApp(App[str | None]):
     def compose(self) -> ComposeResult:
         yield BranchList(self.branches, self._current_branch_name())
         with Vertical(id="footer-container"):
+            yield Input(
+                placeholder="Filter branches (Enter checkout, Esc cancel)",
+                id="filter-input",
+            )
             yield Static("", id="details")
             yield Static("Ready", id="status")
             yield Static(
-                "[underline]c[/]heckout  [underline]r[/]ebase  "
+                "[underline]/[/] filter  [underline]c[/]heckout  [underline]r[/]ebase  "
                 "[underline]n[/]ew  [underline]d[/]elete  "
                 "[underline]q[/]uit",
                 id="controls",
@@ -599,16 +636,23 @@ class HopApp(App[str | None]):
     def on_worker_state_changed(self, event: Worker.StateChanged) -> None:  # type: ignore[misc]
         """Handle worker completion.
 
-        The result carries the branch name, so routing goes by name inside
-        update_branch — the branch may have shifted rows or been deleted while
-        this metadata was loading.
+        The result carries the branch name, so routing goes by name — the
+        branch may have shifted rows, been deleted, or be hidden by the
+        filter while this metadata was loading.
         """
         if (
             event.state == event.worker.state.SUCCESS  # type: ignore[misc]
             and event.worker.result is not None  # type: ignore[misc]
         ):
+            updated = cast(BranchInfo, event.worker.result)  # type: ignore[misc]
+            # Store in the full list too: the visible list may be a filtered
+            # subset that does not contain this branch right now.
+            for i, existing in enumerate(self.branches):
+                if existing.name == updated.name:
+                    self.branches[i] = updated
+                    break
             branch_list = self.query_one(BranchList)
-            branch_list.update_branch(event.worker.result)  # type: ignore[arg-type,misc]
+            branch_list.update_branch(updated)
             # The loaded metadata may belong to the selected row.
             self._update_details(branch_list.cursor_row)
 
@@ -632,13 +676,22 @@ class HopApp(App[str | None]):
     def action_help(self) -> None:
         self.push_screen(HelpScreen())
 
-    def action_checkout(self) -> None:
+    def _selected_branch(self) -> BranchInfo | None:
         branch_list = self.query_one(BranchList)
         cursor_row = branch_list.cursor_row
-        if cursor_row < 0 or cursor_row >= len(self.branches):
-            return
+        if cursor_row < 0 or cursor_row >= len(branch_list.branches):
+            return None
+        return branch_list.branches[cursor_row]
 
-        branch = self.branches[cursor_row]
+    def action_checkout(self) -> None:
+        if (branch := self._selected_branch()) is not None:
+            self._checkout(branch)
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:  # type: ignore[misc]
+        """Enter on the branch list checks out, like most list UIs."""
+        self.action_checkout()
+
+    def _checkout(self, branch: BranchInfo) -> None:
         if (worktree := self._other_worktree_path(branch)) is not None:
             if self.jump_enabled:
                 self.exit(worktree)
@@ -656,13 +709,59 @@ class HopApp(App[str | None]):
         except RuntimeError as e:
             self.show_error(str(e))
 
-    def action_rebase(self) -> None:
+    def action_open_filter(self) -> None:
+        filter_input = self.query_one("#filter-input", Input)
+        # Resetting the value re-applies an empty filter via on_input_changed.
+        filter_input.value = ""
+        filter_input.display = True
+        filter_input.focus()
+
+    def action_close_filter(self) -> None:
+        filter_input = self.query_one("#filter-input", Input)
+        if not filter_input.display:
+            return
+        # Keep the highlighted branch selected in the restored full list.
+        selected = self._selected_branch()
+        filter_input.display = False
         branch_list = self.query_one(BranchList)
-        cursor_row = branch_list.cursor_row
-        if cursor_row < 0 or cursor_row >= len(self.branches):
+        branch_list.set_branches(self.branches)
+        if selected is not None:
+            for idx, branch in enumerate(self.branches):
+                if branch.name == selected.name:
+                    branch_list.move_cursor(row=idx)  # type: ignore[misc]
+                    break
+        branch_list.focus()
+        self._update_details(branch_list.cursor_row)
+
+    def _apply_filter(self, query: str) -> None:
+        query = query.strip().lower()
+        visible = [b for b in self.branches if query in b.name.lower()]
+        branch_list = self.query_one(BranchList)
+        branch_list.set_branches(visible)
+        if visible:
+            branch_list.move_cursor(row=0)  # type: ignore[misc]
+        self._update_details(branch_list.cursor_row)
+
+    def on_input_changed(self, event: Input.Changed) -> None:  # type: ignore[misc]
+        # Input events from modal dialogs (new-branch name) bubble up here
+        # too; only the filter input narrows the list.
+        if event.input.id == "filter-input":  # type: ignore[misc]
+            self._apply_filter(event.value)  # type: ignore[misc]
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:  # type: ignore[misc]
+        if event.input.id != "filter-input":  # type: ignore[misc]
+            return
+        # Capture the selection before closing: closing restores the full
+        # list and moves the cursor.
+        branch = self._selected_branch()
+        self.action_close_filter()
+        if branch is not None:
+            self._checkout(branch)
+
+    def action_rebase(self) -> None:
+        if (branch := self._selected_branch()) is None:
             return
 
-        branch = self.branches[cursor_row]
         worktree = self._other_worktree_path(branch)
         try:
             self.client.rebase_to_branch(branch.name, worktree)
@@ -677,10 +776,10 @@ class HopApp(App[str | None]):
     def action_delete(self) -> None:
         branch_list = self.query_one(BranchList)
         cursor_row = branch_list.cursor_row
-        if cursor_row < 0 or cursor_row >= len(self.branches):
+        if cursor_row < 0 or cursor_row >= len(branch_list.branches):
             return
 
-        branch = self.branches[cursor_row]
+        branch = branch_list.branches[cursor_row]
 
         # git refuses to delete a branch checked out in any worktree; catch it
         # here with a clear message instead of surfacing git's raw error after
@@ -710,40 +809,41 @@ class HopApp(App[str | None]):
         # row_index was captured when the action started; the list may have
         # changed while the confirmation dialog was open, so verify the row
         # still holds the branch the user confirmed.
-        if row_index < 0 or row_index >= len(self.branches):
+        branch_list = self.query_one(BranchList)
+        if row_index < 0 or row_index >= len(branch_list.branches):
             self.show_error("Branch index out of range")
             return
 
-        if self.branches[row_index].name != branch_name:
+        if branch_list.branches[row_index].name != branch_name:
             self.show_error("Branch list changed, please try again")
             return
 
         try:
             self.client.delete_branch(branch_name)
-
-            # Cancel any pending metadata workers for this branch BEFORE removing
-            if row_index < len(self.metadata_workers):
-                worker = self.metadata_workers[row_index]
-                worker.cancel()  # type: ignore[misc]
-                del self.metadata_workers[row_index]
-
-            branch_list = self.query_one(BranchList)
-            branch_list.remove_branch(row_index)
-            # The cursor may now rest on a different branch (or none).
-            self._update_details(branch_list.cursor_row)
-
-            self.show_success(f"Deleted branch: {branch_name}")
-            # Do NOT exit - stay in UI for more operations
         except RuntimeError as e:
             self.show_error(str(e))
-
-    def action_new_branch(self) -> None:
-        branch_list = self.query_one(BranchList)
-        cursor_row = branch_list.cursor_row
-        if cursor_row < 0 or cursor_row >= len(self.branches):
             return
 
-        source_branch = self.branches[cursor_row]
+        # Drop the branch (and its pending metadata worker, aligned with the
+        # full list) from the full list; the visible list may be a filtered
+        # subset with different indices.
+        full_index = next((i for i, b in enumerate(self.branches) if b.name == branch_name), None)
+        if full_index is not None:
+            del self.branches[full_index]
+            if full_index < len(self.metadata_workers):
+                self.metadata_workers[full_index].cancel()  # type: ignore[misc]
+                del self.metadata_workers[full_index]
+
+        branch_list.remove_branch(row_index)
+        # The cursor may now rest on a different branch (or none).
+        self._update_details(branch_list.cursor_row)
+
+        self.show_success(f"Deleted branch: {branch_name}")
+        # Do NOT exit - stay in UI for more operations
+
+    def action_new_branch(self) -> None:
+        if (source_branch := self._selected_branch()) is None:
+            return
 
         prefix = get_prefix_for_branch(source_branch.name, self.config)
 
@@ -756,13 +856,10 @@ class HopApp(App[str | None]):
         if branch_name is None:  # cancelled
             return
 
-        branch_list = self.query_one(BranchList)
-        cursor_row = branch_list.cursor_row
-        if cursor_row < 0 or cursor_row >= len(self.branches):
+        source_branch = self._selected_branch()
+        if source_branch is None:
             self.show_error("Invalid branch selection")
             return
-
-        source_branch = self.branches[cursor_row]
 
         try:
             self.client.create_branch(source_branch.name, branch_name)
