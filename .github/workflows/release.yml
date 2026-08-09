@@ -49,9 +49,26 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
+      # --generate-notes builds notes from merged PRs, which this repo's
+      # direct-push workflow never produces; derive them from the commit
+      # subjects since the previous tag instead.
+      - name: Generate release notes from commits
+        run: |
+          prev=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          {
+            echo "## Changes"
+            git log --format='- %s' ${prev:+$prev..}"$GITHUB_REF_NAME"
+            echo
+            if [ -n "$prev" ]; then
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${GITHUB_REF_NAME}"
+            else
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/commits/${GITHUB_REF_NAME}"
+            fi
+          } > release-notes.md
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create "$GITHUB_REF_NAME" dist/*
-          --verify-tag --generate-notes
+          --verify-tag --notes-file release-notes.md
