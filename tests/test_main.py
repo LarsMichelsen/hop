@@ -23,6 +23,22 @@ def _client_with_a_branch() -> FakeGitClient:
     )
 
 
+def test_main_exits_when_the_config_file_is_broken(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("invalid toml [[[")
+    monkeypatch.setattr("hop.config.get_config_path", lambda: config_file)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main([], client=_client_with_a_branch())
+
+    assert exc_info.value.code == 1
+    assert "Invalid config" in capsys.readouterr().err
+
+
 def test_main_exits_when_branch_listing_raises_runtime_error(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

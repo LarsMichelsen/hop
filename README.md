@@ -100,7 +100,9 @@ then shows where the branch lives instead of jumping.
 
 `hop` reads an optional TOML file at `~/.config/hop/config.toml`. Everything in
 it is optional. An absent file, section, or key falls back to the defaults
-shown below. Create a documented starting point with:
+shown below. A file that exists but cannot be parsed (or contains invalid
+values) is an error: `hop` refuses to start until it is fixed — or rewritten
+with `hop init-config --force`. Create a documented starting point with:
 
 ```bash
 hop init-config          # write ~/.config/hop/config.toml

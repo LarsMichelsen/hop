@@ -4,6 +4,7 @@ import pytest
 
 from hop.config import (
     Config,
+    ConfigError,
     get_config_path,
     get_example_config,
     get_prefix_for_branch,
@@ -86,14 +87,66 @@ def test_load_config_returns_empty_config_when_file_is_empty(tmp_path: Path) -> 
     assert config.branch_prefixes == {}
 
 
-def test_load_config_returns_empty_config_when_toml_is_invalid(tmp_path: Path) -> None:
+def test_load_config_rejects_invalid_toml(tmp_path: Path) -> None:
     config_file = tmp_path / "config.toml"
     config_file.write_text("invalid toml content [[[")
 
-    config = load_config(config_file)
+    with pytest.raises(ConfigError, match="Invalid config"):
+        load_config(config_file)
 
-    assert config.default_branch_prefix == ""
-    assert config.branch_prefixes == {}
+
+def test_load_config_rejects_an_unreadable_config_file(tmp_path: Path) -> None:
+    # A directory at the config path triggers the same OSError path as a
+    # permission problem, portably.
+    with pytest.raises(ConfigError, match="Could not read config"):
+        load_config(tmp_path)
+
+
+def test_load_config_rejects_a_section_that_is_not_a_table(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('defaults = "feat/"')
+
+    with pytest.raises(ConfigError, match=r"\[defaults\] must be a table"):
+        load_config(config_file)
+
+
+def test_load_config_rejects_a_non_string_branch_prefix(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+[branch_prefixes]
+main = 5
+"""
+    )
+
+    with pytest.raises(ConfigError, match="main must be a string"):
+        load_config(config_file)
+
+
+def test_load_config_rejects_a_non_string_theme(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+[ui]
+theme = 5
+"""
+    )
+
+    with pytest.raises(ConfigError, match="theme must be a string"):
+        load_config(config_file)
+
+
+def test_load_config_rejects_an_unknown_theme_name(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+[ui]
+theme = "nrod"
+"""
+    )
+
+    with pytest.raises(ConfigError, match="unknown theme 'nrod'"):
+        load_config(config_file)
 
 
 def test_get_prefix_for_branch_returns_configured_prefix_when_branch_is_present() -> None:

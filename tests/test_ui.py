@@ -1421,5 +1421,7 @@ def test_run_interactive_ui_constructs_HopApp_with_branches_and_client_and_runs_
 
         run_interactive_ui(sample_branches, client)
 
-        mock_app_class.assert_called_once_with(sample_branches, client, jump_enabled=False)
+        mock_app_class.assert_called_once_with(
+            sample_branches, client, config=None, jump_enabled=False
+        )
         mock_app_instance.run.assert_called_once()

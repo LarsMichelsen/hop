@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from hop import __version__
-from hop.config import install_example_config
+from hop.config import ConfigError, install_example_config, load_config
 from hop.git import GitClient, SubprocessGitClient
 from hop.ui import run_interactive_ui
 
@@ -58,6 +58,15 @@ def main(argv: list[str] | None = None, client: GitClient | None = None) -> None
         _init_config(args.force)
         return
 
+    # A broken config is a hard error, surfaced before anything else runs:
+    # silently falling back to defaults would hide the user's mistake.
+    # `hop init-config --force` (handled above) stays usable to rewrite it.
+    try:
+        config = load_config()
+    except ConfigError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
     if client is None:
         client = SubprocessGitClient()
 
@@ -76,7 +85,9 @@ def main(argv: list[str] | None = None, client: GitClient | None = None) -> None
         sys.exit(1)
 
     try:
-        jump_target = run_interactive_ui(branches, client, jump_enabled=args.cd_file is not None)
+        jump_target = run_interactive_ui(
+            branches, client, config=config, jump_enabled=args.cd_file is not None
+        )
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

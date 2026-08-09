@@ -2,7 +2,19 @@
 
 import pytest
 
-from hop.theme import DEFAULT_THEME, next_theme, pick_terminal_fallback, resolve_theme
+from hop.theme import (
+    DEFAULT_THEME,
+    is_known_theme,
+    next_theme,
+    pick_terminal_fallback,
+    resolve_theme,
+)
+
+
+def test_is_known_theme_accepts_names_and_aliases_but_not_typos() -> None:
+    assert is_known_theme("nord") is True
+    assert is_known_theme("dark") is True  # alias for textual-dark
+    assert is_known_theme("nrod") is False
 
 
 @pytest.mark.parametrize(

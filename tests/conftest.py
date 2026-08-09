@@ -4,6 +4,20 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def isolate_from_user_home(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Point HOME at a fresh directory so tests never read the developer's
+    real ~/.config/hop/config.toml.
+
+    main() and HopApp fall back to load_config() when no config is injected;
+    without this, tests would pick up the developer's settings — and a broken
+    real config would fail the whole suite now that load_config hard-fails.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+
+
+@pytest.fixture(autouse=True)
 def isolate_from_ambient_git(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make every git spawned by a test behave like on a bare CI machine."""
     # Tests that shell out to git must not inherit GIT_* vars from an outer git

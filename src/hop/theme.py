@@ -41,6 +41,10 @@ def _normalize(value: str) -> str | None:
     return name if name in VALID_THEMES else None
 
 
+def is_known_theme(value: str) -> bool:
+    return _normalize(value) is not None
+
+
 def resolve_theme(setting: str, env: Mapping[str, str]) -> str:
     """Resolve a config setting + environment into a Textual theme name.
 

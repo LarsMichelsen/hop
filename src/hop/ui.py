@@ -834,11 +834,12 @@ class HopApp(App[str | None]):
 def run_interactive_ui(
     branches: list[BranchInfo],
     client: GitClient | None = None,
+    config: Config | None = None,
     jump_enabled: bool = False,
 ) -> str | None:
     """Run the interactive terminal UI for branch selection.
 
     Returns the worktree path to jump to, or None when the user just quit.
     """
-    app = HopApp(branches, client, jump_enabled=jump_enabled)
+    app = HopApp(branches, client, config=config, jump_enabled=jump_enabled)
     return app.run()
