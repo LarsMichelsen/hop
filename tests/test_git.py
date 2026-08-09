@@ -674,6 +674,23 @@ def _init_repo_with_feature_worktree(tmp_path: Path) -> tuple[list[str], Path, P
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run([*git, "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
+    # The rebase tests make hop itself run `git rebase`, which creates commits
+    # and therefore needs a committer identity. The per-command -c flags above
+    # don't reach hop's own git calls, and CI runners have no identity
+    # configured anywhere, so store one in the repo's local config (shared
+    # with the linked worktree).
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
     subprocess.run(
         [*git, "commit", "--allow-empty", "-m", "init"],
         cwd=repo,
