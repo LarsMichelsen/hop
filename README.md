@@ -8,9 +8,10 @@ When you live in short-lived feature branches, switching between them with `git 
 remembering names and typing them out. `hop` shows the branches you've touched most recently at the
 top, so the one you want is almost always a keystroke away.
 
-![hop demo](demo/demo.gif)
+<!-- Absolute URLs: PyPI renders this README but does not resolve relative links. -->
+![hop demo](https://raw.githubusercontent.com/LarsMichelsen/hop/main/demo/demo.gif)
 
-<sub>Recorded from a reproducible synthetic repo — see [`demo/PLAYBOOK.md`](demo/PLAYBOOK.md).</sub>
+<sub>Recorded from a reproducible synthetic repo — see [`demo/PLAYBOOK.md`](https://github.com/LarsMichelsen/hop/blob/main/demo/PLAYBOOK.md).</sub>
 
 ## Features
 
@@ -164,8 +165,8 @@ uv sync
 uv run hop
 ```
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow and pre-commit checks.
+See [docs/DEVELOPMENT.md](https://github.com/LarsMichelsen/hop/blob/main/docs/DEVELOPMENT.md) for development workflow and pre-commit checks.
 
 ## License
 
-[Apache License 2.0](LICENSE.md) © Lars Michelsen
+[Apache License 2.0](https://github.com/LarsMichelsen/hop/blob/main/LICENSE.md) © Lars Michelsen
