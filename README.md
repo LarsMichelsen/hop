@@ -124,10 +124,12 @@ branch_prefix = ""
 
 [branch_prefixes]
 # Per-source-branch prefixes: creating a branch from one of these pre-fills the
-# input with the mapped prefix. Quote names containing slashes.
+# input with the mapped prefix. Quote names containing dots or slashes —
+# unquoted, TOML splits keys like 2.5.0 at the dots.
 main = "feature/"
 develop = "feat/"
 # "release/v1.0" = "bugfix/"
+# "2.5.0" = "bugfix/"
 ```
 
 | Setting | Purpose |

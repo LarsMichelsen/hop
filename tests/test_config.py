@@ -110,6 +110,22 @@ def test_load_config_rejects_a_section_that_is_not_a_table(tmp_path: Path) -> No
         load_config(config_file)
 
 
+def test_load_config_explains_how_to_quote_a_dotted_branch_name(tmp_path: Path) -> None:
+    # Unquoted, TOML reads `2.5.0` as nested tables {"2": {"5": {"0": ...}}};
+    # the error must reconstruct the intended name and show the quoted fix.
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+[branch_prefixes]
+master = "sandbox/lm/3.0/"
+2.5.0 = "sandbox/lm/2.5/"
+"""
+    )
+
+    with pytest.raises(ConfigError, match=r'quote the branch name: "2\.5\.0"'):
+        load_config(config_file)
+
+
 def test_load_config_rejects_a_non_string_branch_prefix(tmp_path: Path) -> None:
     config_file = tmp_path / "config.toml"
     config_file.write_text(

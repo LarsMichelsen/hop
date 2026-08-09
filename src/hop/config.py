@@ -66,6 +66,16 @@ def load_config(config_path: Path | None = None) -> Config:
 
     branch_prefixes: dict[str, str] = {}
     for name, prefix in _table(data, "branch_prefixes", config_path).items():
+        if isinstance(prefix, dict):
+            # TOML splits an unquoted dotted key into nested tables:
+            # `2.5.0 = "x"` arrives as {"2": {"5": {"0": "x"}}}, silently
+            # never matching the branch. Name the fix instead of just the type.
+            dotted = _dotted_key(name, cast(dict[str, object], prefix))
+            raise ConfigError(
+                f"Invalid config {config_path}: [branch_prefixes] {name} was read as a "
+                f"nested table because TOML splits unquoted keys at dots; quote the "
+                f'branch name: "{dotted}" = "..."'
+            )
         if not isinstance(prefix, str):
             raise ConfigError(
                 f"Invalid config {config_path}: [branch_prefixes] {name} must be a string"
@@ -83,6 +93,20 @@ def load_config(config_path: Path | None = None) -> Config:
         ),
         theme=theme,
     )
+
+
+def _dotted_key(name: str, value: object) -> str:
+    """Rejoin a dot-split key for the error message, e.g. "2.5.0".
+
+    A merged table can hold several split keys ("2.4.0" and "2.5.0" share the
+    "2" node); following the first child of each level reconstructs one of
+    them, which is enough for an example.
+    """
+    parts = [name]
+    while isinstance(value, dict) and value:
+        key, value = next(iter(cast(dict[str, object], value).items()))
+        parts.append(key)
+    return ".".join(parts)
 
 
 def _table(data: dict[str, Any], key: str, path: Path) -> dict[str, Any]:

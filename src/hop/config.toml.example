@@ -24,6 +24,7 @@ develop = "feat/"
 staging = "hotfix/"
 production = "hotfix/"
 
-# Example with branch names containing special characters
-# Use quotes for branch names with slashes or other special characters
+# Quote branch names containing dots, slashes, or other special characters
+# (unquoted, TOML splits keys like 2.5.0 at the dots):
 # "release/v1.0" = "bugfix/"
+# "2.5.0" = "bugfix/"
