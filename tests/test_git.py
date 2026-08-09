@@ -7,20 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from hop.git import (
-    BranchInfo,
-    SubprocessGitClient,
-    checkout_branch,
-    create_branch,
-    delete_branch,
-    fetch_branch_metadata,
-    get_base_branch,
-    get_branches_fast,
-    get_current_branch,
-    is_git_repo,
-    rebase_to_branch,
-    validate_branch_name,
-)
+from hop.git import BranchInfo, SubprocessGitClient, validate_branch_name
 
 
 def test_is_git_repo_returns_false_when_git_rev_parse_fails() -> None:
@@ -28,7 +15,7 @@ def test_is_git_repo_returns_false_when_git_rev_parse_fails() -> None:
     mock_result.returncode = 128
 
     with patch("subprocess.run", return_value=mock_result):
-        assert is_git_repo() is False
+        assert SubprocessGitClient().is_git_repo() is False
 
 
 def test_get_current_branch_raises_when_git_rev_parse_fails() -> None:
@@ -40,7 +27,7 @@ def test_get_current_branch_raises_when_git_rev_parse_fails() -> None:
         patch("subprocess.run", return_value=mock_result),
         pytest.raises(RuntimeError, match="Failed to get current branch"),
     ):
-        get_current_branch()
+        SubprocessGitClient().get_current_branch()
 
 
 def test_get_branches_fast_returns_branches_sorted_by_creator_date_descending(
@@ -60,7 +47,7 @@ def test_get_branches_fast_returns_branches_sorted_by_creator_date_descending(
     subprocess.run([*git, "branch", "feature"], cwd=tmp_path, check=True, capture_output=True)
     monkeypatch.chdir(tmp_path)
 
-    branches = get_branches_fast()
+    branches = SubprocessGitClient().get_branches_fast()
 
     assert len(branches) > 0
     for branch in branches:
@@ -92,7 +79,7 @@ def test_get_branches_fast_parses_a_branch_whose_name_contains_a_pipe(
     subprocess.run([*git, "branch", "feat|x"], cwd=tmp_path, check=True, capture_output=True)
     monkeypatch.chdir(tmp_path)
 
-    branches = get_branches_fast()
+    branches = SubprocessGitClient().get_branches_fast()
 
     piped = next(b for b in branches if b.name == "feat|x")
     assert isinstance(piped.creator_date, datetime)
@@ -108,7 +95,7 @@ def test_get_branches_fast_raises_when_git_for_each_ref_fails() -> None:
         patch("subprocess.run", return_value=mock_result),
         pytest.raises(RuntimeError, match="Failed to get branches"),
     ):
-        get_branches_fast()
+        SubprocessGitClient().get_branches_fast()
 
 
 def test_get_branches_fast_returns_empty_list_when_git_output_is_empty() -> None:
@@ -117,7 +104,7 @@ def test_get_branches_fast_returns_empty_list_when_git_output_is_empty() -> None
     mock_result.stdout = ""
 
     with patch("subprocess.run", return_value=mock_result):
-        branches = get_branches_fast()
+        branches = SubprocessGitClient().get_branches_fast()
         assert branches == []
 
 
@@ -127,7 +114,7 @@ def test_get_branches_fast_skips_lines_that_lack_four_tab_separated_parts() -> N
     mock_result.stdout = "main\t2025-01-01\t\tInitial commit\ninvalid_line\n"
 
     with patch("subprocess.run", return_value=mock_result):
-        branches = get_branches_fast()
+        branches = SubprocessGitClient().get_branches_fast()
         assert len(branches) == 1
         assert branches[0].name == "main"
 
@@ -144,7 +131,7 @@ def test_fetch_branch_metadata_returns_no_upstream_when_for_each_ref_emits_only_
     mock_result.stdout = "\t"
 
     with patch("subprocess.run", return_value=mock_result):
-        updated = fetch_branch_metadata(branch)
+        updated = SubprocessGitClient().fetch_branch_metadata(branch)
         assert updated.upstream is None
         assert updated.track_status == ""
         assert updated.is_merged is False
@@ -178,7 +165,7 @@ def test_fetch_branch_metadata_marks_branch_merged_when_merge_base_succeeds() ->
         side_effect=[mock_for_each_ref, mock_merge_base, mock_upstream_count]
         + [mock_no_candidate] * 4,
     ):
-        updated = fetch_branch_metadata(branch)
+        updated = SubprocessGitClient().fetch_branch_metadata(branch)
         assert updated.upstream == "origin/feature"
         assert updated.track_status == "="
         assert updated.is_merged is True
@@ -213,7 +200,7 @@ def test_fetch_branch_metadata_marks_branch_unmerged_when_merge_base_fails() -> 
         side_effect=[mock_for_each_ref, mock_merge_base, mock_upstream_count]
         + [mock_no_candidate] * 4,
     ):
-        updated = fetch_branch_metadata(branch)
+        updated = SubprocessGitClient().fetch_branch_metadata(branch)
         assert updated.upstream == "origin/feature"
         assert updated.track_status == ">"
         assert updated.is_merged is False
@@ -250,7 +237,7 @@ def test_fetch_branch_metadata_parses_upstream_ref_name_containing_a_pipe() -> N
         side_effect=[mock_for_each_ref, mock_merge_base, mock_upstream_count]
         + [mock_no_candidate] * 4,
     ):
-        updated = fetch_branch_metadata(branch)
+        updated = SubprocessGitClient().fetch_branch_metadata(branch)
         assert updated.upstream == "origin/feat|x"
         assert updated.track_status == "<>"
 
@@ -271,7 +258,7 @@ def test_fetch_branch_metadata_counts_commits_ahead_and_behind_the_base_branch(
 
     branch = BranchInfo(name="feature", creator_date=datetime.now(), last_commit_message="feat-1")
 
-    updated = fetch_branch_metadata(branch)
+    updated = SubprocessGitClient().fetch_branch_metadata(branch)
 
     assert updated.base_branch == "main"
     assert updated.ahead == 1
@@ -296,7 +283,7 @@ def test_fetch_branch_metadata_counts_commits_against_the_upstream(
 
     branch = BranchInfo(name="feature", creator_date=datetime.now(), last_commit_message="feat-1")
 
-    updated = fetch_branch_metadata(branch)
+    updated = SubprocessGitClient().fetch_branch_metadata(branch)
 
     assert updated.upstream == "main"
     assert updated.upstream_ahead == 1
@@ -320,7 +307,7 @@ def test_fetch_branch_metadata_leaves_counts_unset_when_no_base_branch_exists(
 
     branch = BranchInfo(name="main", creator_date=datetime.now(), last_commit_message="init")
 
-    updated = fetch_branch_metadata(branch)
+    updated = SubprocessGitClient().fetch_branch_metadata(branch)
 
     assert updated.base_branch is None
     assert updated.ahead is None
@@ -368,7 +355,7 @@ def test_fetch_branch_metadata_leaves_counts_unset_when_rev_list_fails() -> None
             mock_rev_list,
         ],
     ):
-        updated = fetch_branch_metadata(branch)
+        updated = SubprocessGitClient().fetch_branch_metadata(branch)
 
     assert updated.base_branch == "main"
     assert updated.ahead is None
@@ -380,7 +367,7 @@ def test_checkout_branch_completes_when_git_checkout_succeeds() -> None:
     mock_result.returncode = 0
 
     with patch("subprocess.run", return_value=mock_result):
-        checkout_branch("main")
+        SubprocessGitClient().checkout_branch("main")
 
 
 def test_checkout_branch_raises_when_git_checkout_fails() -> None:
@@ -392,7 +379,7 @@ def test_checkout_branch_raises_when_git_checkout_fails() -> None:
         patch("subprocess.run", return_value=mock_result),
         pytest.raises(RuntimeError, match="Failed to checkout branch"),
     ):
-        checkout_branch("nonexistent")
+        SubprocessGitClient().checkout_branch("nonexistent")
 
 
 def test_get_base_branch_returns_local_branch_matching_configured_upstream() -> None:
@@ -404,7 +391,7 @@ def test_get_base_branch_returns_local_branch_matching_configured_upstream() -> 
     mock_verify.returncode = 0
 
     with patch("subprocess.run", side_effect=[mock_upstream, mock_verify]):
-        base = get_base_branch("feature")
+        base = SubprocessGitClient().get_base_branch("feature")
         assert base == "main"
 
 
@@ -431,7 +418,7 @@ def test_get_base_branch_picks_the_candidate_the_feature_most_recently_forked_fr
     _run_git(tmp_path, "commit", "--allow-empty", "-m", "feature-1")
     monkeypatch.chdir(tmp_path)
 
-    assert get_base_branch("feature") == "develop"
+    assert SubprocessGitClient().get_base_branch("feature") == "develop"
 
 
 def test_get_base_branch_falls_back_to_main_when_feature_forked_from_main(
@@ -446,7 +433,7 @@ def test_get_base_branch_falls_back_to_main_when_feature_forked_from_main(
     _run_git(tmp_path, "commit", "--allow-empty", "-m", "feature-1")
     monkeypatch.chdir(tmp_path)
 
-    assert get_base_branch("feature") == "main"
+    assert SubprocessGitClient().get_base_branch("feature") == "main"
 
 
 def test_get_base_branch_skips_candidates_with_unrelated_history(
@@ -462,7 +449,7 @@ def test_get_base_branch_skips_candidates_with_unrelated_history(
     _run_git(tmp_path, "commit", "--allow-empty", "-m", "feature-1")
     monkeypatch.chdir(tmp_path)
 
-    assert get_base_branch("feature") == "develop"
+    assert SubprocessGitClient().get_base_branch("feature") == "develop"
 
 
 def test_get_base_branch_skips_candidate_when_commit_count_fails() -> None:
@@ -496,7 +483,7 @@ def test_get_base_branch_skips_candidate_when_commit_count_fails() -> None:
             mock_no_branch,  # development
         ],
     ):
-        assert get_base_branch("feature") is None
+        assert SubprocessGitClient().get_base_branch("feature") is None
 
 
 def test_get_base_branch_returns_none_when_no_candidate_base_exists() -> None:
@@ -508,7 +495,7 @@ def test_get_base_branch_returns_none_when_no_candidate_base_exists() -> None:
     mock_no_branch.returncode = 1
 
     with patch("subprocess.run", side_effect=[mock_no_upstream] + [mock_no_branch] * 4):
-        base = get_base_branch("orphan")
+        base = SubprocessGitClient().get_base_branch("orphan")
         assert base is None
 
 
@@ -567,7 +554,7 @@ def test_delete_branch_completes_when_git_branch_delete_succeeds() -> None:
     mock_delete.returncode = 0
 
     with patch("subprocess.run", side_effect=[mock_current, mock_delete]):
-        delete_branch("feature")
+        SubprocessGitClient().delete_branch("feature")
 
 
 def test_delete_branch_raises_when_git_branch_delete_fails() -> None:
@@ -579,7 +566,7 @@ def test_delete_branch_raises_when_git_branch_delete_fails() -> None:
         patch("subprocess.run", return_value=mock_result),
         pytest.raises(RuntimeError, match="Failed to delete branch"),
     ):
-        delete_branch("main")
+        SubprocessGitClient().delete_branch("main")
 
 
 def test_delete_branch_refuses_to_delete_the_currently_checked_out_branch() -> None:
@@ -596,7 +583,7 @@ def test_create_branch_completes_when_git_branch_create_succeeds() -> None:
     mock_create.returncode = 0
 
     with patch("subprocess.run", return_value=mock_create):
-        create_branch("main", "new-feature")
+        SubprocessGitClient().create_branch("main", "new-feature")
 
 
 @pytest.mark.parametrize(
@@ -608,7 +595,7 @@ def test_create_branch_completes_when_git_branch_create_succeeds() -> None:
 )
 def test_create_branch_raises_when_new_name_is_blank(new_name: str) -> None:
     with pytest.raises(RuntimeError, match="Branch name cannot be empty"):
-        create_branch("main", new_name)
+        SubprocessGitClient().create_branch("main", new_name)
 
 
 def test_create_branch_raises_when_git_branch_create_fails() -> None:
@@ -620,7 +607,7 @@ def test_create_branch_raises_when_git_branch_create_fails() -> None:
         patch("subprocess.run", return_value=mock_result),
         pytest.raises(RuntimeError, match="Failed to create branch"),
     ):
-        create_branch("main", "existing-branch")
+        SubprocessGitClient().create_branch("main", "existing-branch")
 
 
 @pytest.mark.parametrize(
@@ -715,7 +702,7 @@ def test_get_branches_fast_reports_the_worktree_holding_each_branch(
     subprocess.run([*git, "branch", "idle"], cwd=repo, check=True, capture_output=True)
     monkeypatch.chdir(repo)
 
-    branches = {b.name: b for b in get_branches_fast()}
+    branches = {b.name: b for b in SubprocessGitClient().get_branches_fast()}
 
     assert branches["idle"].worktree_path is None
     assert branches["feature"].worktree_path is not None
@@ -729,9 +716,10 @@ def test_fetch_branch_metadata_reports_the_worktree_holding_the_branch(
 ) -> None:
     _git, repo, worktree = _init_repo_with_feature_worktree(tmp_path)
     monkeypatch.chdir(repo)
-    listed = next(b for b in get_branches_fast() if b.name == "feature")
+    client = SubprocessGitClient()
+    listed = next(b for b in client.get_branches_fast() if b.name == "feature")
 
-    loaded = fetch_branch_metadata(listed)
+    loaded = client.fetch_branch_metadata(listed)
 
     assert loaded.worktree_path is not None
     assert Path(loaded.worktree_path).resolve() == worktree.resolve()
@@ -754,7 +742,7 @@ def test_rebase_in_another_worktree_updates_the_branch_without_switching_here(
     )
     monkeypatch.chdir(repo)
 
-    rebase_to_branch("feature", str(worktree))
+    SubprocessGitClient().rebase_to_branch("feature", str(worktree))
 
     head_here = subprocess.run(
         ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo, capture_output=True, text=True
@@ -781,7 +769,7 @@ def test_rebase_in_another_worktree_aborts_a_conflicting_rebase(
     monkeypatch.chdir(repo)
 
     with pytest.raises(RuntimeError, match="rebase aborted"):
-        rebase_to_branch("feature", str(worktree))
+        SubprocessGitClient().rebase_to_branch("feature", str(worktree))
 
     status = subprocess.run(["git", "-C", str(worktree), "status"], capture_output=True, text=True)
     assert "rebase in progress" not in status.stdout
