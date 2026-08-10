@@ -1495,6 +1495,25 @@ async def test_filter_matches_case_insensitively() -> None:
         assert [b.name for b in app.query_one(BranchList).branches] == ["bugfix/crash"]
 
 
+async def test_filter_matches_the_commit_message_as_well() -> None:
+    branches = [
+        _branch("main", last_commit_message="Initial commit"),
+        _branch("feature/login", last_commit_message="Add login form"),
+        _branch("bugfix/crash", last_commit_message="Fix startup failure"),
+    ]
+    client = FakeGitClient(branches=branches)
+    app = HopApp(branches, client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("slash")
+        for char in "startup":
+            await pilot.press(char)
+        await pilot.pause()
+
+        assert [b.name for b in app.query_one(BranchList).branches] == ["bugfix/crash"]
+
+
 async def test_enter_in_the_filter_checks_out_the_highlighted_branch() -> None:
     branches = _filter_branches()
     client = FakeGitClient(branches=branches)

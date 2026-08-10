@@ -70,8 +70,9 @@ Navigation:
 Actions:
   c / Enter  Checkout selected branch (jump to its
              worktree when held by another one)
-  /          Filter branches: type to narrow, arrows
-             to pick, Enter to checkout, Esc to cancel
+  /          Filter by name or commit message:
+             type to narrow, arrows to pick,
+             Enter to checkout, Esc to cancel
   r          Rebase selected branch onto its base
   d          Delete selected branch (with confirmation)
   n          Create new branch from selected branch
@@ -760,7 +761,11 @@ class HopApp(App[str | None]):
 
     def _apply_filter(self, query: str) -> None:
         query = query.strip().lower()
-        visible = [b for b in self.branches if query in b.name.lower()]
+        visible = [
+            b
+            for b in self.branches
+            if query in b.name.lower() or query in b.last_commit_message.lower()
+        ]
         branch_list = self.query_one(BranchList)
         branch_list.set_branches(visible)
         if visible:

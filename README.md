@@ -17,7 +17,8 @@ top, so the one you want is almost always a keystroke away.
 
 - Interactive text-based UI for browsing git branches
 - List branches ordered by last commit date
-- Type-to-filter: `/` narrows the list as you type
+- Type-to-filter: `/` narrows the list as you type, matching branch names and
+  commit messages
 - Show branch info: date, name, and last commit message
 - Details line for the selected branch: commits ahead/behind its base branch
   and its upstream (e.g. `base main: +2 -5 | upstream origin/x: +1 -0`)
@@ -71,7 +72,7 @@ to get the full traceback instead — please include it in bug reports.
 
 - `↑`/`↓` or `j`/`k` - Navigate branches
 - `c` or `Enter` - Checkout selected branch (or jump to its worktree, see below)
-- `/` - Filter branches: type to narrow, `↑`/`↓` to pick, `Enter` to checkout, `Esc` to cancel
+- `/` - Filter branches by name or commit message: type to narrow, `↑`/`↓` to pick, `Enter` to checkout, `Esc` to cancel
 - `r` - Rebase selected branch onto its base
 - `n` - Create new branch from selected branch
 - `d` - Delete selected branch
