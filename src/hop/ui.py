@@ -6,7 +6,7 @@ from dataclasses import replace
 from typing import ClassVar, cast
 
 from rich.text import Text
-from textual import events, work
+from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
@@ -461,11 +461,6 @@ class BranchList(DataTable):  # type: ignore[misc]
 
         if self.cursor_row >= len(self.branches) and len(self.branches) > 0:
             self.cursor_row = len(self.branches) - 1  # type: ignore[misc]
-
-    async def _on_click(self, event: events.Click) -> None:
-        """Disable mouse click navigation."""
-        event.prevent_default()
-        event.stop()
 
 
 class HopApp(App[str | None]):
@@ -969,4 +964,6 @@ def run_interactive_ui(
     Returns the worktree path to jump to, or None when the user just quit.
     """
     app = HopApp(branches, client, config=config, jump_enabled=jump_enabled)
-    return app.run()
+    # Leave the mouse to the terminal so branch names and other text can be
+    # selected and copied natively; hop is keyboard-driven anyway.
+    return app.run(mouse=False)

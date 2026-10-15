@@ -80,6 +80,9 @@ to get the full traceback instead — please include it in bug reports.
 - `h` - Show help screen
 - `q` - Quit
 
+The mouse is left to the terminal, so you can select and copy branch names
+and other text as usual.
+
 ### Shell integration: jump between worktrees
 
 Branches checked out in another worktree are marked `+`. Pressing `c` on one

@@ -311,21 +311,6 @@ async def test_deleting_the_bottom_branch_moves_cursor_and_details_to_the_row_ab
         assert "base main: +1 -0" in str(details.content)
 
 
-async def test_mouse_clicks_do_not_move_the_cursor(
-    sample_branches: list[BranchInfo],
-) -> None:
-    app = HopApp(sample_branches, client=FakeGitClient(branches=sample_branches))
-
-    async with app.run_test() as pilot:
-        await pilot.pause()
-        branch_list = app.query_one(BranchList)
-        assert branch_list.cursor_row == 0
-
-        await pilot.click(BranchList, offset=(10, 1))  # second row
-
-        assert branch_list.cursor_row == 0
-
-
 async def test_remove_branch_is_noop_for_out_of_range_indices(
     sample_branches: list[BranchInfo],
 ) -> None:
@@ -1446,7 +1431,7 @@ def test_run_interactive_ui_constructs_HopApp_with_branches_and_client_and_runs_
         mock_app_class.assert_called_once_with(
             sample_branches, client, config=None, jump_enabled=False
         )
-        mock_app_instance.run.assert_called_once()
+        mock_app_instance.run.assert_called_once_with(mouse=False)
 
 
 # ---------------------------------------------------------------------------
@@ -1567,6 +1552,21 @@ async def test_escape_cancels_the_filter_and_keeps_the_highlighted_branch_select
         assert app.focused is branch_list
         assert app.query_one("#filter-input", Input).display is False
         assert client.checkout_calls == []
+
+
+async def test_escape_without_an_open_filter_keeps_the_cursor_in_place() -> None:
+    branches = _filter_branches()
+    app = HopApp(branches, client=FakeGitClient(branches=branches))
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")
+        await pilot.press("escape")
+        await pilot.pause()
+
+        branch_list = app.query_one(BranchList)
+        assert branch_list.cursor_row == 1
+        assert app.query_one("#filter-input", Input).display is False
 
 
 async def test_enter_in_a_filter_without_matches_checks_nothing_out() -> None:
