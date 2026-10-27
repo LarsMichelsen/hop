@@ -28,6 +28,9 @@ top, so the one you want is almost always a keystroke away.
   (like `git branch`), checkout/delete of them is refused with a clear
   message, and rebase runs inside the worktree that holds them
 - Vim-style navigation (arrow keys or j/k)
+- Picks up branch changes made outside hop: `Ctrl+r` reloads the list, and it
+  reloads by itself when the terminal regains focus (in terminals that report
+  focus changes)
 
 ## Installation
 

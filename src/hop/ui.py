@@ -6,7 +6,7 @@ from dataclasses import replace
 from typing import ClassVar, cast
 
 from rich.text import Text
-from textual import work
+from textual import events, work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
@@ -78,6 +78,8 @@ Actions:
   n          Create new branch from selected branch
   t          Cycle theme (dark/light, then back
              to the startup theme)
+  Ctrl+r     Reload branches from git (also done
+             when the terminal regains focus)
   h          Show this help screen
   q          Quit application
 
@@ -542,6 +544,7 @@ class HopApp(App[str | None]):
         ("d", "delete", "Delete"),
         ("n", "new_branch", "New Branch"),
         ("t", "toggle_theme", "Toggle Theme"),
+        ("ctrl+r", "reload", "Reload"),
         ("slash", "open_filter", "Filter"),
         ("escape", "close_filter", "Close Filter"),
         ("h", "help", "Help"),
@@ -603,6 +606,9 @@ class HopApp(App[str | None]):
             yield Input(
                 placeholder="Filter branches (Enter checkout, Esc cancel)",
                 id="filter-input",
+                # A reload refocuses the input mid-query; selecting the text
+                # then would let the next keystroke replace it.
+                select_on_focus=False,
             )
             yield Static("", id="details")
             yield Static("Ready", id="status")
@@ -894,6 +900,35 @@ class HopApp(App[str | None]):
         except RuntimeError as e:
             self.show_error(str(e))
 
+    def action_reload(self) -> None:
+        self._reload()
+
+    def on_app_focus(self, event: events.AppFocus) -> None:
+        # Branches may have been changed from another shell while hop sat in
+        # the background. Only fires in terminals reporting focus changes.
+        self._reload()
+
+    def _reload(self) -> None:
+        """Re-read branches from git, keeping the selection and an open filter."""
+        # Dialogs act on a row of the current list, which must not shift
+        # under them.
+        if isinstance(self.screen, ModalScreen):
+            return
+        selected = self._selected_branch()
+        self.refresh_branches(focus_branch_name=selected.name if selected else None)
+        filter_input = self.query_one("#filter-input", Input)
+        if not filter_input.display:
+            return
+        self._apply_filter(filter_input.value)
+        branch_list = self.query_one(BranchList)
+        if selected is not None:
+            for idx, branch in enumerate(branch_list.branches):
+                if branch.name == selected.name:
+                    branch_list.move_cursor(row=idx)  # type: ignore[misc]
+                    break
+        self._update_details(branch_list.cursor_row)
+        filter_input.focus()
+
     def refresh_branches(self, focus_branch_name: str | None = None) -> None:
         """Rebuild the branch list from git and restart metadata loading.
 
@@ -908,32 +943,31 @@ class HopApp(App[str | None]):
                 worker.cancel()  # type: ignore[misc]
             self.metadata_workers.clear()
 
-            old_branch_list = self.query_one(BranchList)
-            old_cursor_row = old_branch_list.cursor_row
-            old_branch_list.remove()
-
-            new_branch_list = BranchList(new_branches, self._current_branch_name())
-            # before=1: keep the table above the footer container.
-            self.mount(new_branch_list, before=1)
+            branch_list = self.query_one(BranchList)
+            old_cursor_row = branch_list.cursor_row
+            # Refill the mounted table rather than mounting a fresh one: a new
+            # table only gets its rows on mount, after the cursor was placed.
+            branch_list.current_branch = self._current_branch_name()
+            branch_list.set_branches(new_branches)
 
             if focus_branch_name is not None:
                 for idx, branch in enumerate(new_branches):
                     if branch.name == focus_branch_name:
-                        new_branch_list.move_cursor(row=idx)  # type: ignore[misc]
+                        branch_list.move_cursor(row=idx)  # type: ignore[misc]
                         break
                 else:
-                    # Branch not found (shouldn't happen), fall back to first row
+                    # Branch gone (e.g. deleted outside hop), fall back to first row
                     if len(new_branches) > 0:
-                        new_branch_list.move_cursor(row=0)  # type: ignore[misc]
+                        branch_list.move_cursor(row=0)  # type: ignore[misc]
             elif 0 <= old_cursor_row < len(new_branches):
-                new_branch_list.move_cursor(row=old_cursor_row)  # type: ignore[misc]
+                branch_list.move_cursor(row=old_cursor_row)  # type: ignore[misc]
             elif len(new_branches) > 0:
-                new_branch_list.move_cursor(row=0)  # type: ignore[misc]
+                branch_list.move_cursor(row=0)  # type: ignore[misc]
 
-            new_branch_list.focus()
+            branch_list.focus()
             # Cursor restoration may keep the same row index, which emits no
             # RowHighlighted, so refresh the details line explicitly.
-            self._update_details(new_branch_list.cursor_row)
+            self._update_details(branch_list.cursor_row)
 
             self.load_metadata()
 

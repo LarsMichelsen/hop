@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 from rich.cells import cell_len
 from rich.text import Text
+from textual import events
 from textual.widgets import Button, Input, Label, Static
 
 from hop.config import Config
@@ -1256,6 +1257,116 @@ async def test_refresh_failure_shows_error_status(
 
         status = app.query_one("#status", Static)
         assert "[Error] Could not refresh branches" in str(status.content)
+
+
+# ---------------------------------------------------------------------------
+# Reload (Ctrl+r and terminal focus)
+# ---------------------------------------------------------------------------
+
+
+async def test_ctrl_r_reloads_branches_and_keeps_the_selected_branch() -> None:
+    # A branch created outside hop sorts in above the selected one.
+    shown = [_branch("main"), _branch("feature")]
+    client = FakeGitClient(branches=[_branch("main"), _branch("hotfix"), _branch("feature")])
+    app = HopApp(list(shown), client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j")
+
+        await pilot.press("ctrl+r")
+        await pilot.pause()
+
+        branch_list = app.query_one(BranchList)
+        assert [b.name for b in branch_list.branches] == ["main", "hotfix", "feature"]
+        assert branch_list.branches[branch_list.cursor_row].name == "feature"
+
+
+async def test_regaining_terminal_focus_reloads_branches(
+    sample_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=[*sample_branches, _branch("hotfix")])
+    app = HopApp(list(sample_branches), client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        app.post_message(events.AppFocus())
+        await pilot.pause()
+
+        assert "hotfix" in {b.name for b in app.query_one(BranchList).branches}
+
+
+async def test_reload_moves_to_the_first_row_when_the_selected_branch_is_gone() -> None:
+    shown = [_branch("main"), _branch("feature"), _branch("bugfix")]
+    client = FakeGitClient(branches=[_branch("main"), _branch("feature")])
+    app = HopApp(list(shown), client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("j", "j")
+
+        await pilot.press("ctrl+r")
+        await pilot.pause()
+
+        assert app.query_one(BranchList).cursor_row == 0
+
+
+async def test_reload_keeps_an_open_filter_applied_and_focused() -> None:
+    shown = _filter_branches()
+    client = FakeGitClient(branches=[*shown, _branch("feature/admin")])
+    app = HopApp(list(shown), client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("slash", "f", "e", "a", "down")
+
+        await pilot.press("ctrl+r")
+        await pilot.pause()
+
+        filter_input = app.query_one("#filter-input", Input)
+        branch_list = app.query_one(BranchList)
+        assert [b.name for b in branch_list.branches] == [
+            "feature/login",
+            "feature/search",
+            "feature/admin",
+        ]
+        assert branch_list.branches[branch_list.cursor_row].name == "feature/search"
+        assert filter_input.display is True
+        assert app.focused is filter_input
+
+
+async def test_typing_after_a_reload_extends_the_filter_query() -> None:
+    branches = _filter_branches()
+    client = FakeGitClient(branches=branches)
+    app = HopApp(list(branches), client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("slash", "f", "e", "a")
+
+        await pilot.press("ctrl+r", "t")
+        await pilot.pause()
+
+        assert app.query_one("#filter-input", Input).value == "feat"
+
+
+async def test_reload_is_skipped_while_a_dialog_is_open(
+    sample_branches: list[BranchInfo],
+) -> None:
+    client = FakeGitClient(branches=[*sample_branches, _branch("hotfix")])
+    app = HopApp(list(sample_branches), client=client)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("h")
+        await pilot.pause()
+
+        app.post_message(events.AppFocus())
+        await pilot.pause()
+
+        assert isinstance(app.screen, HelpScreen)
+        assert {b.name for b in app.query_one(BranchList).branches} == {"main", "feature"}
 
 
 # ---------------------------------------------------------------------------
